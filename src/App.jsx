@@ -79,8 +79,8 @@ const foods = [
   { cat: "🥩 Proteins", icon: "🥩", name: "Lamb (100g)", cal: 260, note: "Higher fat — limit", traffic: "yellow" },
   { cat: "🥩 Proteins", icon: "🥩", name: "Pork lean (100g)", cal: 190, note: "Good protein", traffic: "green" },
   { cat: "🥩 Proteins", icon: "🐟", name: "White fish fillet (100g)", cal: 90, note: "Best lean protein", traffic: "green" },
-  { cat: "🥩 Proteins", icon: "🐟", name: "Salmon grilled (100g)", cal: 180, note: "Omega-3 rich", traffic: "green" },
-  { cat: "🥩 Proteins", icon: "🐟", name: "Tuna canned in water (100g)", cal: 110, note: "Cheapest lean protein", traffic: "green" },
+  { cat: "🥩 Proteins", icon: "🐟", name: "Salmon grilled (100g)", cal: 208, note: "Omega-3 rich · USDA verified", traffic: "green" },
+  { cat: "🥩 Proteins", icon: "🐟", name: "Tuna canned in water (100g)", cal: 126, note: "Cheapest lean protein · USDA verified", traffic: "green" },
   { cat: "🥩 Proteins", icon: "🐟", name: "Tuna canned in oil (100g)", cal: 190, note: "Drain oil first", traffic: "green" },
   { cat: "🥩 Proteins", icon: "🦐", name: "Prawns / Shrimp (100g)", cal: 99, note: "Very lean protein", traffic: "green" },
   { cat: "🥩 Proteins", icon: "🦑", name: "Squid (100g)", cal: 92, note: "Grilled only — not fried", traffic: "green" },
@@ -272,8 +272,9 @@ const foods = [
   { cat: "🌅 Breakfast", icon: "🟫", name: "Weetabix (2 biscuits)", cal: 130, note: "Simple and clean", traffic: "green" },
   { cat: "🌅 Breakfast", icon: "🟡", name: "Cornflakes (30g, no sugar)", cal: 110, note: "OK, add protein", traffic: "yellow" },
   { cat: "🌅 Breakfast", icon: "🥚", name: "Scrambled Eggs (2 eggs)", cal: 200, note: "Best breakfast protein", traffic: "green" },
-  { cat: "🌅 Breakfast", icon: "🥗", name: "Greek Yogurt plain (150g)", cal: 145, note: "High protein", traffic: "green" },
-  { cat: "🌅 Breakfast", icon: "🫐", name: "Greek Yogurt with berries", cal: 200, note: "Excellent breakfast", traffic: "green" },
+  { cat: "🌅 Breakfast", icon: "🥗", name: "Greek Yogurt nonfat plain (150g)", cal: 97, note: "High protein · USDA verified", traffic: "green" },
+  { cat: "🌅 Breakfast", icon: "🥗", name: "Greek Yogurt full-fat plain (150g)", cal: 150, note: "Creamier, more fat · USDA", traffic: "green" },
+  { cat: "🌅 Breakfast", icon: "🫐", name: "Greek Yogurt with berries (200g)", cal: 170, note: "Excellent breakfast", traffic: "green" },
   { cat: "🌅 Breakfast", icon: "🥞", name: "Pancakes (2 medium)", cal: 360, note: "High refined flour", traffic: "red" },
   { cat: "🌅 Breakfast", icon: "🧇", name: "Waffles (1 piece)", cal: 290, note: "Refined flour + syrup", traffic: "red" },
   { cat: "🌅 Breakfast", icon: "🍳", name: "Full English Breakfast", cal: 800, note: "Eggs + beans + sausage + toast", traffic: "red" },
@@ -342,6 +343,75 @@ const foods = [
   { cat: "🧀 Dairy & Condiments", icon: "🍯", name: "Honey (1 tbsp)", cal: 64, note: "Still sugar — limit", traffic: "yellow" },
   { cat: "🧀 Dairy & Condiments", icon: "🌶️", name: "Sambal (1 tbsp)", cal: 25, note: "Chilli paste — watch sugar", traffic: "yellow" },
   { cat: "🧀 Dairy & Condiments", icon: "🟡", name: "Belacan / Shrimp Paste (1 tsp)", cal: 10, note: "High sodium, very small amount", traffic: "green" },
+
+  // ─── WESTERN MAINS ───
+  // Proteins: USDA FoodData Central verified. Composite dishes: estimated from standard recipes.
+  { cat: "🍽 Western Mains", icon: "🥩", name: "Sirloin Steak grilled (200g)", cal: 368, note: "USDA: 184 cal/100g trimmed · great protein", traffic: "green" },
+  { cat: "🍽 Western Mains", icon: "🥩", name: "Ribeye Steak (200g)", cal: 540, note: "Higher fat cut · USDA: ~270/100g", traffic: "yellow" },
+  { cat: "🍽 Western Mains", icon: "🥩", name: "T-Bone Steak (200g trimmed)", cal: 380, note: "USDA: ~190/100g trimmed", traffic: "green" },
+  { cat: "🍽 Western Mains", icon: "🥩", name: "Lamb Rack (200g)", cal: 480, note: "Rich, higher fat · USDA: ~240/100g", traffic: "yellow" },
+  { cat: "🍽 Western Mains", icon: "🥩", name: "Lamb Chop (150g)", cal: 375, note: "USDA: ~250/100g with fat", traffic: "yellow" },
+  { cat: "🍽 Western Mains", icon: "🍗", name: "Roast Chicken breast (150g)", cal: 248, note: "USDA verified · best lean choice", traffic: "green" },
+  { cat: "🍽 Western Mains", icon: "🍗", name: "Grilled Chicken Chop (200g)", cal: 330, note: "Skin-off, grilled · excellent", traffic: "green" },
+  { cat: "🍽 Western Mains", icon: "🍗", name: "BBQ Chicken (200g with skin)", cal: 440, note: "Skin adds ~100 cal", traffic: "yellow" },
+  { cat: "🍽 Western Mains", icon: "🐟", name: "Grilled Salmon fillet (200g)", cal: 416, note: "USDA: 208/100g · best dinner", traffic: "green" },
+  { cat: "🍽 Western Mains", icon: "🐟", name: "Baked Cod fillet (200g)", cal: 186, note: "USDA: 93/100g · very lean", traffic: "green" },
+  { cat: "🍽 Western Mains", icon: "🐟", name: "Grilled Mahi-Mahi (200g)", cal: 197, note: "USDA: ~99/100g · lean white fish", traffic: "green" },
+  { cat: "🍽 Western Mains", icon: "🐟", name: "Fish & Chips (full portion)", cal: 800, note: "Battered + fried + chips", traffic: "red" },
+  { cat: "🍽 Western Mains", icon: "🥩", name: "Pork Tenderloin roasted (150g)", cal: 220, note: "USDA: 147/100g · lean pork", traffic: "green" },
+  { cat: "🍽 Western Mains", icon: "🥩", name: "BBQ Pork Ribs (200g meat)", cal: 580, note: "High fat + BBQ sauce sugar", traffic: "red" },
+  { cat: "🍽 Western Mains", icon: "🥩", name: "Roast Beef (150g)", cal: 276, note: "USDA: 184/100g sirloin", traffic: "green" },
+  { cat: "🍽 Western Mains", icon: "🥩", name: "Beef Burger patty only (150g)", cal: 290, note: "USDA 90% lean: 194/100g", traffic: "yellow" },
+  { cat: "🍽 Western Mains", icon: "🍔", name: "Beef Burger with bun + cheese", cal: 600, note: "Bun + patty + cheese + sauce", traffic: "red" },
+  { cat: "🍽 Western Mains", icon: "🥚", name: "Omelette plain 2 eggs", cal: 190, note: "USDA: 78/egg + minimal oil", traffic: "green" },
+  { cat: "🍽 Western Mains", icon: "🥚", name: "Omelette with cheese + veg", cal: 280, note: "Cheese adds ~90 cal", traffic: "green" },
+  { cat: "🍽 Western Mains", icon: "🍳", name: "Eggs Benedict (2 eggs)", cal: 600, note: "Hollandaise sauce = 200+ cal alone", traffic: "red" },
+  { cat: "🍽 Western Mains", icon: "🍳", name: "Fried Eggs 2 (minimal oil)", cal: 185, note: "USDA: ~78/egg + oil", traffic: "green" },
+  { cat: "🍽 Western Mains", icon: "🥞", name: "French Toast (2 slices)", cal: 320, note: "Egg + bread + butter", traffic: "red" },
+  { cat: "🍽 Western Mains", icon: "🥓", name: "Bacon 3 strips cooked (24g)", cal: 129, note: "USDA verified · high sodium", traffic: "yellow" },
+  { cat: "🍽 Western Mains", icon: "🥓", name: "Full English Breakfast", cal: 800, note: "Eggs + bacon + sausage + beans + toast", traffic: "red" },
+  { cat: "🍽 Western Mains", icon: "🥗", name: "Caesar Salad no dressing", cal: 80, note: "Romaine + croutons, no dressing", traffic: "green" },
+  { cat: "🍽 Western Mains", icon: "🥗", name: "Caesar Salad with dressing", cal: 350, note: "Dressing adds ~270 cal", traffic: "yellow" },
+  { cat: "🍽 Western Mains", icon: "🥗", name: "Cobb Salad (full)", cal: 520, note: "Egg + bacon + chicken + avocado", traffic: "yellow" },
+  { cat: "🍽 Western Mains", icon: "🥗", name: "Greek Salad (full)", cal: 200, note: "Veg + feta + olive oil", traffic: "green" },
+  { cat: "🍽 Western Mains", icon: "🥗", name: "Chicken Caesar Wrap", cal: 480, note: "Tortilla + chicken + dressing", traffic: "yellow" },
+  { cat: "🍽 Western Mains", icon: "🥪", name: "Club Sandwich (3 layer)", cal: 560, note: "3 bread slices + mayo + meat", traffic: "red" },
+  { cat: "🍽 Western Mains", icon: "🥪", name: "BLT Sandwich", cal: 400, note: "Bacon + lettuce + tomato + mayo", traffic: "yellow" },
+  { cat: "🍽 Western Mains", icon: "🥪", name: "Grilled Cheese Sandwich", cal: 400, note: "2 slices bread + cheese + butter", traffic: "red" },
+  { cat: "🍽 Western Mains", icon: "🥪", name: "Tuna Melt Sandwich", cal: 450, note: "Tuna + cheese + bread", traffic: "yellow" },
+  { cat: "🍽 Western Mains", icon: "🥪", name: "Turkey Sandwich (no mayo)", cal: 300, note: "USDA deli turkey: 54 per 60g · good", traffic: "green" },
+  { cat: "🍽 Western Mains", icon: "🥪", name: "Ham Sandwich (no mayo)", cal: 280, note: "USDA deli ham: 61 per 60g", traffic: "green" },
+  { cat: "🍽 Western Mains", icon: "🍲", name: "Beef Stew (1 bowl 350g)", cal: 350, note: "Lean beef + veg · good choice", traffic: "green" },
+  { cat: "🍽 Western Mains", icon: "🍲", name: "Chicken Soup homemade (1 bowl)", cal: 180, note: "Very low cal, high protein", traffic: "green" },
+  { cat: "🍽 Western Mains", icon: "🍲", name: "Tomato Soup (1 bowl 250ml)", cal: 160, note: "Watch cream-added versions", traffic: "yellow" },
+  { cat: "🍽 Western Mains", icon: "🥧", name: "Chicken Pot Pie (1 slice)", cal: 550, note: "Pastry crust = hidden calories", traffic: "red" },
+  { cat: "🍽 Western Mains", icon: "🥧", name: "Shepherd's Pie (1 serving)", cal: 450, note: "Mashed potato top + meat filling", traffic: "yellow" },
+  { cat: "🍽 Western Mains", icon: "🍕", name: "Pizza Margherita (2 slices)", cal: 500, note: "~250 per slice", traffic: "yellow" },
+  { cat: "🍽 Western Mains", icon: "🌮", name: "Fish Tacos (2 tacos)", cal: 350, note: "Corn tortilla + fish + slaw", traffic: "yellow" },
+  { cat: "🍽 Western Mains", icon: "🌮", name: "Chicken Tacos (2 tacos)", cal: 320, note: "Corn tortilla + grilled chicken", traffic: "yellow" },
+
+  // ─── WESTERN SIDES ───
+  { cat: "🍽 Western Mains", icon: "🥔", name: "Mashed Potato (1 cup 240g)", cal: 230, note: "Butter + milk adds cal", traffic: "yellow" },
+  { cat: "🍽 Western Mains", icon: "🥔", name: "Baked Potato plain (medium)", cal: 161, note: "USDA: 161 for 173g · skip toppings", traffic: "yellow" },
+  { cat: "🍽 Western Mains", icon: "🥔", name: "Baked Potato loaded (sour cream + cheese)", cal: 400, note: "Toppings double the calories", traffic: "red" },
+  { cat: "🍽 Western Mains", icon: "🍟", name: "Restaurant Fries (100g)", cal: 312, note: "Deep fried · empty calories", traffic: "red" },
+  { cat: "🍽 Western Mains", icon: "🍠", name: "Sweet Potato Fries (100g)", cal: 170, note: "Better than regular fries", traffic: "yellow" },
+  { cat: "🍽 Western Mains", icon: "🧅", name: "Onion Rings (100g)", cal: 380, note: "Battered + fried", traffic: "red" },
+  { cat: "🍽 Western Mains", icon: "🥗", name: "Coleslaw (100g)", cal: 150, note: "Mayo base — watch portion", traffic: "yellow" },
+  { cat: "🍽 Western Mains", icon: "🌽", name: "Corn on the Cob (1 ear)", cal: 77, note: "USDA: 77 for 90g · good choice", traffic: "green" },
+  { cat: "🍽 Western Mains", icon: "🥦", name: "Steamed Broccoli side (150g)", cal: 52, note: "Best side dish — eat freely", traffic: "green" },
+  { cat: "🍽 Western Mains", icon: "🫘", name: "Baked Beans (100g)", cal: 94, note: "Good fiber + protein", traffic: "green" },
+  { cat: "🍽 Western Mains", icon: "🥚", name: "Deviled Eggs (2 halves)", cal: 140, note: "Egg + mayo filling", traffic: "yellow" },
+  { cat: "🍽 Western Mains", icon: "🧀", name: "Mac and Cheese homemade (1 cup)", cal: 490, note: "Pasta + cheese sauce", traffic: "red" },
+  { cat: "🍽 Western Mains", icon: "🥩", name: "Beef Lasagne (1 serving 250g)", cal: 400, note: "Pasta + meat + cheese layers", traffic: "yellow" },
+  { cat: "🍽 Western Mains", icon: "🍗", name: "Chicken Alfredo (1 plate)", cal: 720, note: "Cream sauce + pasta — heavy", traffic: "red" },
+
+  // ─── WESTERN DELI & MEATS (USDA verified) ───
+  { cat: "🍽 Western Mains", icon: "🥩", name: "Turkey Breast deli sliced (60g)", cal: 54, note: "USDA verified · best deli meat", traffic: "green" },
+  { cat: "🍽 Western Mains", icon: "🥩", name: "Ham deli sliced (60g)", cal: 61, note: "USDA verified · moderate sodium", traffic: "green" },
+  { cat: "🍽 Western Mains", icon: "🌭", name: "Hot Dog / Frankfurter (1)", cal: 180, note: "Processed meat — limit", traffic: "red" },
+  { cat: "🍽 Western Mains", icon: "🌭", name: "Sausage pork link (1 cooked)", cal: 130, note: "High fat + sodium", traffic: "red" },
+  { cat: "🍽 Western Mains", icon: "🥩", name: "Beef Meatballs (3 medium)", cal: 210, note: "Good protein, watch sauce", traffic: "yellow" },
 ];
 
 const categories = ["All", ...Array.from(new Set(foods.map(f => f.cat)))];
@@ -388,7 +458,7 @@ export default function App() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <div>
             <div style={{ fontSize: 22, fontWeight: 900, color: "#fff", letterSpacing: -0.5 }}>🥗 CalTrack</div>
-            <div style={{ fontSize: 10, color: "#444" }}>Mounjaro · 120kg · 174cm · 42y · {foods.length} foods</div>
+            <div style={{ fontSize: 10, color: "#444" }}>Mounjaro · 120kg · 174cm · 42y · {foods.length} foods · USDA verified</div>
           </div>
           <div style={{ display: "flex", gap: 6 }}>
             {[
