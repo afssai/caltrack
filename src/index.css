@@ -941,12 +941,12 @@ body::after { display: none; }
   object-fit: contain;
 }
 .lock-logo {
-  height: 55px;
-  margin-bottom: 8px;
+  height: 120px;
+  margin-bottom: 12px;
 }
 .app-logo {
-  height: 47px;
-  margin: 0 auto 2px;
+  height: 90px;
+  margin: 0 auto 4px;
 }
 .brand-mark {
   font: 700 28px/1 "Syne", sans-serif;
