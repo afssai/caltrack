@@ -1290,14 +1290,26 @@ export default function AppV2() {
     if (!barcode.trim()) return flash("Enter the printed barcode number first.");
     setResults([]);
     runRequest("Looking up barcode...", async () => {
+      const code = barcode.trim();
+      const local = [...(data.customFoods || []), ...(data.pantry || [])].find(
+        (f) => f.sourceId === code || f.sourceId === `barcode:${code}`,
+      );
+      if (local) {
+        flash("Found in your saved foods!");
+        setResults([{ ...local, confidence: local.confidence || "manual" }]);
+        return;
+      }
       const response = await fetch(
-        `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode.trim())}.json`,
+        `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`,
       );
       if (!response.ok) throw new Error("Barcode lookup failed.");
       const payload = await response.json();
-      if (payload.status !== 1) throw new Error("Barcode not found in Open Food Facts.");
+      if (payload.status !== 1) {
+        setCustom((c) => ({ ...c, sourceId: `barcode:${code}`, name: c.name || "" }));
+        throw new Error(`Barcode ${code} not in the database. Fill in the nutrition below and save — next scan will find it instantly.`);
+      }
       const food = openFoodFactsFood(payload.product);
-      if (!food.per100.calories) throw new Error("Product found, but it has no calorie data.");
+      if (!food.per100.calories) throw new Error("Product found, but it has no calorie data. Enter values manually.");
       setResults([food]);
     });
   }
