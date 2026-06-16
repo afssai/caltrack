@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Droplets, Coffee, Footprints, Dumbbell, Flame, Plus, List, Settings, CalendarDays, ScanLine, User, Activity, Waves } from "lucide-react";
+import { Droplets, Coffee, Footprints, Dumbbell, Flame, Plus, List, CalendarDays, ScanLine, User, Activity, Waves, Beef, Wheat, Leaf, Droplet } from "lucide-react";
 import { createWorker } from "tesseract.js";
 import {
   cacheFoodResult,
@@ -45,13 +45,32 @@ const CONFIDENCE = {
 
 function MiniIcon({ type, size = 22 }) {
   const props = { size, strokeWidth: 1.8, "aria-hidden": true };
-  if (type === "walk")    return <Footprints {...props} />;
-  if (type === "swim")    return <Waves {...props} />;
-  if (type === "weights") return <Dumbbell {...props} />;
+  if (type === "walk" || type === "walking")   return <Footprints {...props} />;
+  if (type === "swim" || type === "swimming")  return <Waves {...props} />;
+  if (type === "weights" || type === "strength") return <Dumbbell {...props} />;
   if (type === "water")   return <Droplets {...props} />;
   if (type === "coffee")  return <Coffee {...props} />;
   if (type === "fire")    return <Flame {...props} />;
+  if (type === "protein") return <Beef {...props} />;
+  if (type === "carbs")   return <Wheat {...props} />;
+  if (type === "fat")     return <Droplet {...props} />;
+  if (type === "fiber")   return <Leaf {...props} />;
   return <Activity {...props} />;
+}
+
+function LiquidOrb({ LIcon, fill, color, glow, label, value, onClick, animate }) {
+  return (
+    <button className={`liquid-orb-btn${animate ? " liquid-orb-pulse" : ""}`} onClick={onClick} aria-label={label}>
+      <div className="liquid-orb" style={{ "--fill": `${fill}%`, "--liq-color": color, "--liq-glow": glow }}>
+        <div className="liquid-body">
+          <div className="liquid-wave-top" />
+        </div>
+        <LIcon size={26} strokeWidth={1.7} className="liquid-orb-icon" />
+      </div>
+      <span className="orb-label">{label}</span>
+      <span className="orb-value">{value}</span>
+    </button>
+  );
 }
 
 function CalorieRing({ consumed, burned, target, percent }) {
@@ -1669,42 +1688,39 @@ export default function AppV2() {
 
       {tab === "diary" && (
         <section className="top-vitals">
-          <div className="vitals-left">
-            <div className="hydration-glass-card">
-              <button className="glass-button" onClick={() => addWater(250)} aria-label="Add 250ml water">
-                <span className="glass" style={{ "--fill": `${hydrationPercent}%` }}>
-                  <Droplets size={20} strokeWidth={1.8} aria-hidden="true" />
-                </span>
-                <div>
-                  <small className="vitals-label">Water</small>
-                  <span>{Math.round(dailyLog.water || 0)} ml</span>
+          <LiquidOrb
+            LIcon={Droplets}
+            fill={hydrationPercent}
+            color="rgba(77,195,255,.7)"
+            glow="rgba(77,195,255,.25)"
+            label="Water"
+            value={`${Math.round(dailyLog.water || 0)} ml`}
+            onClick={() => addWater(250)}
+          />
+          <LiquidOrb
+            LIcon={Coffee}
+            fill={Math.min(100, coffeeCount * 25)}
+            color="rgba(255,140,0,.7)"
+            glow="rgba(255,140,0,.25)"
+            label="Coffee"
+            value={coffeeCount > 0 ? `${coffeeCount} today` : "Tap"}
+            onClick={logCoffeeDirect}
+            animate={coffeeCount >= 3}
+          />
+          {ACTIVITY_PRESETS.map((item) => {
+            const minutes = activityMinutesByType[item.type] || 0;
+            const iconType = item.label === "Swim" ? "swim" : item.label === "Weights" ? "weights" : "walk";
+            const active = minutes > 0;
+            return (
+              <button className={`activity-orb-btn${active ? " activity-active" : ""}`} key={item.type} onClick={() => openActivity(item.type, item.minutes)} aria-label={`Log ${item.label}`}>
+                <div className="activity-orb">
+                  <MiniIcon type={iconType} size={24} />
                 </div>
+                <span className="orb-label">{item.label}</span>
+                <span className="orb-value">{minutes ? `${minutes}m` : "—"}</span>
               </button>
-            </div>
-            <div className="coffee-card" data-count={Math.min(coffeeCount, 6)}>
-              <button className="glass-button" onClick={logCoffeeDirect} aria-label="Log coffee">
-                <span className="glass glass-coffee" style={{ "--fill": `${Math.min(100, coffeeCount * 25)}%` }}>
-                  <Coffee size={20} strokeWidth={1.8} aria-hidden="true" />
-                </span>
-                <div>
-                  <small className="vitals-label">Coffee</small>
-                  <span>{coffeeCount > 0 ? `${coffeeCount} today` : "Tap to log"}</span>
-                </div>
-              </button>
-            </div>
-          </div>
-          <div className="top-activity-icons">
-            {ACTIVITY_PRESETS.map((item) => {
-              const minutes = activityMinutesByType[item.type] || 0;
-              const iconType = item.label === "Swim" ? "swim" : item.label === "Weights" ? "weights" : "walk";
-              return (
-                <button className="top-activity-button" aria-label={`Log ${item.label}`} key={item.type} onClick={() => openActivity(item.type, item.minutes)}>
-                  <MiniIcon type={iconType} size={26} />
-                  <span>{minutes ? `${minutes}m` : item.label}</span>
-                </button>
-              );
-            })}
-          </div>
+            );
+          })}
         </section>
       )}
 
