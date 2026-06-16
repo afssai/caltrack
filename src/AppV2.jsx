@@ -509,7 +509,12 @@ export default function AppV2() {
     async function check() {
       try {
         const result = await checkSupabaseConnection();
-        if (!cancelled) setCloudHealth({ status: result.authenticated ? "authenticated" : "reachable", message: result.authenticated ? "Supabase Auth is reachable and a session is active." : "Supabase Auth is reachable. Sign in to sync." });
+        if (!cancelled) {
+          setCloudHealth({
+            status: result.authenticated ? "authenticated" : "reachable",
+            message: result.message || (result.authenticated ? "Supabase Auth is reachable and a session is active." : "Supabase Auth is reachable. Sign in to sync."),
+          });
+        }
       } catch (error) {
         if (!cancelled) setCloudHealth({ status: "error", message: error.message || "Supabase connection failed." });
       }

@@ -32,11 +32,24 @@ function throwIfError(error, fallback = "Supabase request failed.") {
   if (error) throw new Error(error.message || fallback);
 }
 
-function friendlyNetworkError(error) {
+function friendlySupabaseError(error) {
   if (error?.message === "Failed to fetch" || error instanceof TypeError) {
     return new Error(
       "Could not reach Supabase. Check the deployment Content-Security-Policy, network connection, and that the Supabase project URL is allowed.",
     );
+  }
+  const message = String(error?.message || "");
+  const details = String(error?.details || "");
+  const code = String(error?.code || "");
+  const combined = `${message} ${details} ${code}`.toLowerCase();
+  if (combined.includes("could not find the table") || code === "PGRST205") {
+    return new Error("Supabase is reachable, but the CalTrack database tables are missing. Apply the Supabase migrations before syncing.");
+  }
+  if (combined.includes("permission denied") || combined.includes("grant") || code === "42501") {
+    return new Error("Supabase tables exist, but authenticated table grants or RLS policies are blocking access. Apply the latest CalTrack migration.");
+  }
+  if (combined.includes("bucket") && combined.includes("not found")) {
+    return new Error("Supabase storage is reachable, but the private progress-photos bucket is missing. Apply the Supabase migration.");
   }
   return error;
 }
@@ -46,9 +59,34 @@ export async function checkSupabaseConnection() {
   try {
     const { data, error } = await supabase.auth.getSession();
     throwIfError(error, "Could not reach Supabase Auth.");
-    return { ok: true, authenticated: Boolean(data.session), session: data.session };
+    if (!data.session) {
+      return {
+        ok: true,
+        authenticated: false,
+        databaseReady: null,
+        storageReady: null,
+        session: null,
+        message: "Supabase Auth is reachable. Sign in to verify database sync access.",
+      };
+    }
+
+    const userId = data.session.user?.id;
+    const profileResult = await supabase.from("profiles").select("id").limit(1);
+    if (profileResult.error) throw profileResult.error;
+
+    const storageResult = await supabase.storage.from(BUCKET).list(`${userId}`, { limit: 1 });
+    if (storageResult.error) throw storageResult.error;
+
+    return {
+      ok: true,
+      authenticated: true,
+      databaseReady: true,
+      storageReady: true,
+      session: data.session,
+      message: "Supabase Auth, CalTrack tables, and private photo storage are reachable for this session.",
+    };
   } catch (error) {
-    throw friendlyNetworkError(error);
+    throw friendlySupabaseError(error);
   }
 }
 
@@ -75,7 +113,7 @@ export async function sendMagicLink(email) {
     });
     throwIfError(error, "Could not send sign-in link.");
   } catch (error) {
-    throw friendlyNetworkError(error);
+    throw friendlySupabaseError(error);
   }
 }
 
@@ -497,20 +535,24 @@ export async function pullRemoteData(currentData) {
 }
 
 export async function syncCalTrack(data, session) {
-  const pushed = await pushLocalData(data, session);
-  const pulled = await pullRemoteData(pushed);
-  const merged = mergeData(pushed, pulled);
-  const meta = readSyncMeta();
-  const nextMeta = {
-    ...meta,
-    enabled: true,
-    deviceId: meta.deviceId || crypto.randomUUID(),
-    ids: idsFor(merged),
-    lastSyncedAt: new Date().toISOString(),
-  };
-  writeSyncMeta(nextMeta);
-  await upsert("sync_state", [{ user_id: session.user.id, device_id: nextMeta.deviceId, last_pull_at: new Date().toISOString() }], { onConflict: "user_id" }).catch(() => null);
-  return merged;
+  try {
+    const pushed = await pushLocalData(data, session);
+    const pulled = await pullRemoteData(pushed);
+    const merged = mergeData(pushed, pulled);
+    const meta = readSyncMeta();
+    const nextMeta = {
+      ...meta,
+      enabled: true,
+      deviceId: meta.deviceId || crypto.randomUUID(),
+      ids: idsFor(merged),
+      lastSyncedAt: new Date().toISOString(),
+    };
+    writeSyncMeta(nextMeta);
+    await upsert("sync_state", [{ user_id: session.user.id, device_id: nextMeta.deviceId, last_pull_at: new Date().toISOString() }], { onConflict: "user_id" }).catch(() => null);
+    return merged;
+  } catch (error) {
+    throw friendlySupabaseError(error);
+  }
 }
 
 export function readSyncStatus() {
