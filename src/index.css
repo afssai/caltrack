@@ -1024,18 +1024,21 @@ input:focus, select:focus, textarea:focus {
   text-shadow: 0 0 12px rgba(255, 106, 24, .28);
 }
 .calorie-copy > strong {
-  color: var(--ivory);
-  background: none;
-  -webkit-text-fill-color: currentColor;
-  filter: none;
-  letter-spacing: .5px;
+  font: 400 clamp(72px, 20vw, 116px)/.8 "Bebas Neue", sans-serif;
+  letter-spacing: 3px;
+  background: linear-gradient(160deg, var(--ivory) 20%, var(--accent-warm) 80%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 18px rgba(255, 106, 24, .28));
 }
 .calorie-copy > strong.cal-over {
-  color: var(--accent-danger);
-  background: none;
-  -webkit-text-fill-color: currentColor;
+  background: linear-gradient(160deg, #ff8c42 10%, var(--accent-danger) 85%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 22px rgba(255, 51, 79, .4));
   animation: none;
-  filter: drop-shadow(0 0 18px rgba(255, 51, 79, .28));
 }
 .calorie-equation i { background: var(--accent-good); box-shadow: 0 0 8px rgba(77, 195, 255, .45); }
 .calorie-card:has(.cal-over) .calorie-equation i { background: var(--accent-warm); box-shadow: 0 0 8px rgba(255, 106, 24, .42); }
@@ -2062,31 +2065,42 @@ input:focus, select:focus, textarea:focus {
   transition: stroke-dasharray 1s cubic-bezier(.34, 1.1, .64, 1);
 }
 
-/* ── wider-screen centering ── */
-html, body {
+/* ── icon-only small button ── */
+.icon-btn-sm {
   display: flex;
-  flex-direction: column;
-  min-height: 100dvh;
-}
-body {
   align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: none;
+  background: rgba(255, 255, 255, .05);
+  color: var(--muted2);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background .15s, color .15s;
 }
+.icon-btn-sm:hover { background: rgba(255, 51, 79, .15); color: var(--accent-danger); }
+
+.activity-row-log > div { flex: 1; min-width: 0; }
+
+/* ── RESPONSIVE — clean, mobile-first, no hacks ── */
+
+/* Base: app-shell is full width on mobile */
 .app-shell {
   width: 100%;
-  max-width: 520px;
+  box-sizing: border-box;
 }
 
-@media (min-width: 640px) {
+/* Desktop: center the narrow app in a wider browser window */
+@media (min-width: 580px) {
+  body {
+    background: #01020a;
+  }
   .app-shell {
-    padding-left: 20px;
-    padding-right: 20px;
-  }
-  .top-vitals {
-    padding: 16px 12px;
-  }
-  .liquid-orb,
-  .activity-orb {
-    width: 66px;
-    height: 66px;
+    max-width: 500px;
+    margin: 0 auto;
+    min-height: 100dvh;
+    box-shadow: -1px 0 0 rgba(255,255,255,.04), 1px 0 0 rgba(255,255,255,.04);
   }
 }

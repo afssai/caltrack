@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Droplets, Coffee, Footprints, Dumbbell, Flame, Plus, List, CalendarDays, ScanLine, User, Activity, Waves, Beef, Wheat, Leaf, Droplet } from "lucide-react";
+import { Droplets, Coffee, Footprints, Dumbbell, Flame, Plus, List, CalendarDays, ScanLine, User, Activity, Waves, Beef, Wheat, Leaf, Droplet, Trash2, Pencil, Timer, Zap } from "lucide-react";
 import { createWorker } from "tesseract.js";
 import {
   cacheFoodResult,
@@ -1023,6 +1023,10 @@ export default function AppV2() {
     flash(`${type} logged for ${minutes} minutes.`);
   }
 
+  function removeActivity(id) {
+    updateDailyLog({ activities: (dailyLog.activities || []).filter((a) => a.id !== id) });
+  }
+
   function openActivity(type, minutes = 30) {
     setActivityDraft({ type, minutes });
   }
@@ -1874,10 +1878,10 @@ export default function AppV2() {
               <button className="primary compact" onClick={() => setTab("add")}>Add food</button>
             </div>
             <div className="log-summary-grid">
-              <div><span>Food</span><strong>{Math.round(totals.calories)} kcal</strong></div>
-              <div><span>Water</span><strong>{waterOz || 0} oz</strong></div>
-              <div><span>Activity</span><strong>{activityMinutes || 0} min</strong></div>
-              <div><span>Deficit boost</span><strong>{activityCalories} kcal</strong></div>
+              <div><span><Flame size={11} /> Food</span><strong>{Math.round(totals.calories)}</strong></div>
+              <div><span><Droplets size={11} /> Water</span><strong>{Math.round(dailyLog.water || 0)} ml</strong></div>
+              <div><span><Timer size={11} /> Activity</span><strong>{activityMinutes || 0} min</strong></div>
+              <div><span><Zap size={11} /> Burned</span><strong>{activityCalories} kcal</strong></div>
             </div>
             <div className="log-day-card">
               <strong>{dailyLog.healthFlags?.restDay ? "Rest day" : dailyLog.healthFlags?.lowEnergy ? "Low energy day" : dailyLog.healthFlags?.sick ? "Sick day" : "Normal day"}</strong>
@@ -1887,6 +1891,29 @@ export default function AppV2() {
               <div className="log-day-card">
                 <strong>Meds</strong>
                 <span>{dailyLog.medsTaken?.length ? dailyLog.medsTaken.join(", ") : "Nothing checked off yet."}</span>
+              </div>
+            )}
+            {(dailyLog.activities || []).length > 0 && (
+              <div className="meal">
+                <div className="meal-heading">
+                  <strong><Flame size={13} style={{verticalAlign:"middle",marginRight:4}} />Activities</strong>
+                  <span>{activityCalories} kcal burned</span>
+                </div>
+                {(dailyLog.activities || []).map((act) => {
+                  const iconType = /swim/i.test(act.type) ? "swim" : /weight|strength/i.test(act.type) ? "weights" : "walk";
+                  return (
+                    <article className="food-row activity-row-log" key={act.id}>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <MiniIcon type={iconType} size={16} />
+                        <div>
+                          <strong>{act.type}</strong>
+                          <span><Timer size={11} style={{verticalAlign:"middle",marginRight:2}} />{act.minutes} min · ~{calcBurnedCalories(act.type, act.minutes, number(data.profile.weight))} kcal</span>
+                        </div>
+                      </div>
+                      <button className="icon-btn-sm" aria-label={`Remove ${act.type}`} onClick={() => removeActivity(act.id)}><Trash2 size={14} /></button>
+                    </article>
+                  );
+                })}
               </div>
             )}
             {MEALS.map((meal) => {
@@ -1903,12 +1930,11 @@ export default function AppV2() {
                     <article className="food-row" key={item.id}>
                       <div>
                         <strong>{item.name}</strong>
-                        <span>{item.brand || item.source} - {item.grams}g</span>
-                        <small>P {round(item.protein)}g / C {round(item.carbs)}g / F {round(item.fat)}g</small>
-                        <ConfidenceBadge value={item.confidence} />
+                        <span>{item.grams}g · {item.brand || item.source}</span>
+                        <small>P {round(item.protein)} · C {round(item.carbs)} · F {round(item.fat)}</small>
                       </div>
-                      <b>{Math.round(item.calories)} kcal</b>
-                      <button className="icon-button danger" aria-label={`Remove ${item.name}`} onClick={() => removeFood(item.id)}>Remove</button>
+                      <b>{Math.round(item.calories)}</b>
+                      <button className="icon-btn-sm" aria-label={`Remove ${item.name}`} onClick={() => removeFood(item.id)}><Trash2 size={14} /></button>
                     </article>
                   ))}
                 </div>
