@@ -2,6 +2,21 @@ import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
+
+// Load .env file manually (no dotenv dependency needed)
+try {
+  const envFile = readFileSync(new URL("./.env", import.meta.url), "utf8");
+  for (const line of envFile.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq < 1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    const val = trimmed.slice(eq + 1).trim();
+    if (key && val && !process.env[key]) process.env[key] = val;
+  }
+} catch { /* .env is optional */ }
 
 const root = fileURLToPath(new URL("./dist/", import.meta.url));
 const port = Number(process.env.PORT) || 4173;
