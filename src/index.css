@@ -1050,30 +1050,22 @@ input:focus, select:focus, textarea:focus {
 }
 
 .ring {
-  --activity-progress: 0deg;
-  background: conic-gradient(
-    var(--accent-good) 0deg var(--progress),
-    var(--accent-warm) var(--progress) calc(var(--progress) + var(--activity-progress)),
-    rgba(123, 92, 255, .42) calc(var(--progress) + var(--activity-progress)) 360deg
-  );
+  background: none;
   animation: none;
-  box-shadow: var(--glow-cool);
+  box-shadow: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 100px;
+  width: 100px;
+  height: 100px;
 }
-.calorie-card:has(.cal-over) .ring {
-  background: conic-gradient(
-    var(--accent-danger) 0deg var(--progress),
-    var(--accent-warm) var(--progress) calc(var(--progress) + var(--activity-progress)),
-    rgba(255,255,255,.055) calc(var(--progress) + var(--activity-progress)) 360deg
-  );
-  box-shadow: var(--glow-danger);
+.calorie-ring-svg {
+  display: block;
+  filter: drop-shadow(0 0 10px rgba(77, 195, 255, .22));
 }
-.ring strong { text-shadow: none; }
-.ring em {
-  color: var(--accent-warm);
-  font-style: normal;
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: .04em;
+.calorie-card:has(.cal-over) .calorie-ring-svg {
+  filter: drop-shadow(0 0 10px rgba(255, 51, 79, .28));
 }
 
 .top-vitals {
