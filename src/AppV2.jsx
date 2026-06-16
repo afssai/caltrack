@@ -34,9 +34,35 @@ const API = {
   usda: "/api/usda",
 };
 
+const EXERCISE_MET = { Swimming: 7, Walking: 4, "Strength training": 5, Other: 4 };
+function calcBurnedCalories(type, minutes, weightKg) {
+  const met = EXERCISE_MET[type] || 4;
+  const w = weightKg > 0 ? weightKg : 70;
+  return Math.round((met * 3.5 * w * minutes) / 200);
+}
+function calcBMR(p) {
+  const w = number(p.weight), h = number(p.height), a = number(p.age);
+  if (!w || !h || !a) return 0;
+  return Math.round(p.gender === "female" ? 10 * w + 6.25 * h - 5 * a - 161 : 10 * w + 6.25 * h - 5 * a + 5);
+}
+function calcTDEE(p) {
+  const bmr = calcBMR(p);
+  if (!bmr) return 0;
+  const factors = { sedentary: 1.2, light: 1.375, moderate: 1.55, active: 1.725, very_active: 1.9 };
+  return Math.round(bmr * (factors[p.activityLevel] || 1.2));
+}
+
 const defaultData = {
   version: 2,
   profile: {
+    name: "",
+    gender: "",
+    age: "",
+    height: "",
+    weight: "",
+    highestWeight: "",
+    activityLevel: "sedentary",
+    medicalConditions: "",
     calorieTarget: 2000,
     proteinTarget: 130,
     carbsTarget: 220,
@@ -1363,7 +1389,7 @@ export default function AppV2() {
       <header className="topbar">
         <div>
           <span className="brand-mark">CalTrack</span>
-          <h1>{tab === "diary" ? "Your day, in focus." : ["add", "tools"].includes(tab) ? "Log with confidence." : tab === "coach" ? "Cook from what you have." : tab === "progress" ? "Progress over time." : "Make it yours."}</h1>
+          <h1>{tab === "diary" ? (() => { const h = new Date().getHours(); const g = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; const n = data.profile.name ? `, ${data.profile.name.split(" ")[0]}` : ""; return `${g}${n}.`; })() : ["add", "tools"].includes(tab) ? "Log with confidence." : tab === "coach" ? "Pantry & recipes." : tab === "progress" ? "Progress over time." : "Your profile."}</h1>
         </div>
         <input
           className="date-picker"
@@ -1440,7 +1466,7 @@ export default function AppV2() {
                   event.target.value = "";
                 }} defaultValue=""><option value="">Choose activity</option><option>Swimming</option><option>Walking</option><option>Strength training</option><option>Other</option></select></label>
               </div>
-              <div className="activity-list">{dailyLog.activities.map((activity) => <div className="activity-row" key={activity.id}><strong>{activity.type}</strong><input aria-label={`${activity.type} minutes`} type="number" value={activity.minutes} onChange={(event) => updateDailyLog({ activities: dailyLog.activities.map((item) => item.id === activity.id ? { ...item, minutes: number(event.target.value) } : item) })} /><span>min</span><button className="text-button danger-text" onClick={() => updateDailyLog({ activities: dailyLog.activities.filter((item) => item.id !== activity.id) })}>Remove</button></div>)}</div>
+              <div className="activity-list">{dailyLog.activities.map((activity) => <div className="activity-row" key={activity.id}><strong>{activity.type}</strong><input aria-label={`${activity.type} minutes`} type="number" value={activity.minutes} onChange={(event) => updateDailyLog({ activities: dailyLog.activities.map((item) => item.id === activity.id ? { ...item, minutes: number(event.target.value) } : item) })} /><span>min</span><span className="burn-badge">~{calcBurnedCalories(activity.type, number(activity.minutes), number(data.profile.weight))} kcal burned</span><button className="text-button danger-text" onClick={() => updateDailyLog({ activities: dailyLog.activities.filter((item) => item.id !== activity.id) })}>Remove</button></div>)}</div>
               <label className="field"><span>Daily notes</span><textarea value={dailyLog.notes} onChange={(event) => updateDailyLog({ notes: event.target.value.slice(0, 2000) })} placeholder="Energy, hunger, training, sleep, or anything worth remembering..." /></label>
             </div>
 
@@ -1663,10 +1689,6 @@ export default function AppV2() {
             <button className="primary" onClick={logPackageAmount}>Add calculated amount to diary</button>
             </div>
 
-            <div className="limitation">
-              <strong>Restaurant plate photos</strong>
-              <p>CalTrack does not estimate restaurant plate photos in V1. Use label, barcode, package, or manual entry for now.</p>
-            </div>
           </section>
         )}
 
@@ -1681,17 +1703,17 @@ export default function AppV2() {
             </div>
 
             <div className="tool-card">
-              <div className="section-heading"><div><span className="eyebrow crimson">Home ingredients</span><h2>Pantry</h2></div></div>
+              <div className="section-heading"><div><span className="eyebrow crimson">What's in your kitchen</span><h2>Pantry</h2></div></div>
+              <p className="helper">Just type what you have — nutrition is optional. You can fill it in later.</p>
               <div className="form-grid">
-                <Field label="Ingredient" value={pantryDraft.name} onChange={(event) => setPantryDraft({ ...pantryDraft, name: event.target.value })} />
-                <Field label="Serving grams" suffix="g" type="number" min="1" value={pantryDraft.grams} onChange={(event) => setPantryDraft({ ...pantryDraft, grams: event.target.value })} />
-                <Field label="Calories" suffix="kcal" type="number" min="0" value={pantryDraft.calories} onChange={(event) => setPantryDraft({ ...pantryDraft, calories: event.target.value })} />
-                <Field label="Protein" suffix="g" type="number" min="0" value={pantryDraft.protein} onChange={(event) => setPantryDraft({ ...pantryDraft, protein: event.target.value })} />
-                <Field label="Carbs" suffix="g" type="number" min="0" value={pantryDraft.carbs} onChange={(event) => setPantryDraft({ ...pantryDraft, carbs: event.target.value })} />
-                <Field label="Fat" suffix="g" type="number" min="0" value={pantryDraft.fat} onChange={(event) => setPantryDraft({ ...pantryDraft, fat: event.target.value })} />
-                <Field label="Fiber" suffix="g" type="number" min="0" value={pantryDraft.fiber} onChange={(event) => setPantryDraft({ ...pantryDraft, fiber: event.target.value })} />
+                <Field label="Ingredient name" value={pantryDraft.name} onChange={(event) => setPantryDraft({ ...pantryDraft, name: event.target.value })} />
+                <Field label="Default serving" suffix="g" type="number" min="1" value={pantryDraft.grams} onChange={(event) => setPantryDraft({ ...pantryDraft, grams: event.target.value })} />
+                <Field label="Calories (optional)" suffix="kcal" type="number" min="0" value={pantryDraft.calories} onChange={(event) => setPantryDraft({ ...pantryDraft, calories: event.target.value })} />
+                <Field label="Protein (optional)" suffix="g" type="number" min="0" value={pantryDraft.protein} onChange={(event) => setPantryDraft({ ...pantryDraft, protein: event.target.value })} />
+                <Field label="Carbs (optional)" suffix="g" type="number" min="0" value={pantryDraft.carbs} onChange={(event) => setPantryDraft({ ...pantryDraft, carbs: event.target.value })} />
+                <Field label="Fat (optional)" suffix="g" type="number" min="0" value={pantryDraft.fat} onChange={(event) => setPantryDraft({ ...pantryDraft, fat: event.target.value })} />
               </div>
-              <button className="primary" onClick={saveManualPantry}>{editingPantryId ? "Update ingredient" : "Save ingredient"}</button>
+              <button className="primary" onClick={saveManualPantry}>{editingPantryId ? "Update ingredient" : "Add to pantry"}</button>
               <div className="pantry-list">{data.pantry.map((item) => <article className="food-row" key={item.id}><div><strong>{item.name}</strong><span>{item.source} - {item.defaultGrams}g default</span><ConfidenceBadge value={item.confidence} /></div><b>{scaleNutrition(item.per100, item.defaultGrams).calories} kcal</b><div className="row-actions"><button className="text-button" onClick={() => editPantry(item)}>Edit</button><button className="text-button danger-text" onClick={() => deletePantry(item.id)}>Delete</button></div></article>)}</div>
             </div>
 
@@ -1759,16 +1781,54 @@ export default function AppV2() {
 
         {tab === "settings" && (
           <section className="panel stack">
-            <div className="section-heading"><div><span className="eyebrow">Goals & connections</span><h2>Settings</h2></div></div>
-            <div className="form-grid">
-              <Field label="Daily calorie goal" suffix="kcal" type="number" min="0" value={data.profile.calorieTarget} onChange={(event) => setProfile({ calorieTarget: number(event.target.value) })} />
-              <Field label="Protein goal" suffix="g" type="number" min="0" value={data.profile.proteinTarget} onChange={(event) => setProfile({ proteinTarget: number(event.target.value) })} />
-              <Field label="Carbs goal" suffix="g" type="number" min="0" value={data.profile.carbsTarget} onChange={(event) => setProfile({ carbsTarget: number(event.target.value) })} />
-              <Field label="Fat goal" suffix="g" type="number" min="0" value={data.profile.fatTarget} onChange={(event) => setProfile({ fatTarget: number(event.target.value) })} />
-              <Field label="Fiber goal" suffix="g" type="number" min="0" value={data.profile.fiberTarget} onChange={(event) => setProfile({ fiberTarget: number(event.target.value) })} />
-              <Field label="Water goal" suffix="ml" type="number" min="0" value={data.profile.waterTarget} onChange={(event) => setProfile({ waterTarget: number(event.target.value) })} />
-              <Field label="Goal weight" suffix="kg" type="number" min="0" step="0.1" value={data.profile.goalWeight} onChange={(event) => setProfile({ goalWeight: event.target.value })} />
-              <Field label="Session timeout" suffix="minutes" type="number" min="1" max="240" value={data.profile.sessionTimeout} onChange={(event) => setProfile({ sessionTimeout: Math.min(240, Math.max(1, number(event.target.value))) })} />
+            <div className="section-heading"><div><span className="eyebrow">Your profile</span><h2>Settings</h2></div></div>
+
+            <div className="tool-card profile-card">
+              <div className="section-heading"><div><span className="eyebrow crimson">Step 1 — About you</span><h2>Personal profile</h2></div></div>
+              <p className="helper">Your stats calculate calorie and macro targets using the Mifflin-St Jeor formula — the same one dietitians use. Leave blank if you prefer to set targets manually.</p>
+              <div className="form-grid">
+                <Field label="Your name" value={data.profile.name || ""} onChange={(event) => setProfile({ name: event.target.value })} />
+                <label className="field"><span>Biological sex</span><select value={data.profile.gender || ""} onChange={(event) => setProfile({ gender: event.target.value })}><option value="">Select…</option><option value="male">Male</option><option value="female">Female</option></select></label>
+                <Field label="Age" suffix="yrs" type="number" min="10" max="120" value={data.profile.age || ""} onChange={(event) => setProfile({ age: number(event.target.value) })} />
+                <Field label="Height" suffix="cm" type="number" min="100" max="250" value={data.profile.height || ""} onChange={(event) => setProfile({ height: number(event.target.value) })} />
+                <Field label="Current weight" suffix="kg" type="number" min="30" step="0.1" value={data.profile.weight || ""} onChange={(event) => setProfile({ weight: event.target.value })} />
+                <Field label="Highest ever weight" suffix="kg" type="number" min="30" step="0.1" value={data.profile.highestWeight || ""} onChange={(event) => setProfile({ highestWeight: event.target.value })} />
+                <Field label="Goal weight" suffix="kg" type="number" min="30" step="0.1" value={data.profile.goalWeight || ""} onChange={(event) => setProfile({ goalWeight: event.target.value })} />
+                <label className="field"><span>Activity level</span><select value={data.profile.activityLevel || "sedentary"} onChange={(event) => setProfile({ activityLevel: event.target.value })}><option value="sedentary">Sedentary (desk job, little exercise)</option><option value="light">Light active (1-3 workouts/week)</option><option value="moderate">Moderately active (3-5 workouts/week)</option><option value="active">Very active (6-7 workouts/week)</option><option value="very_active">Extra active (physical job + training)</option></select></label>
+                <label className="field" style={{gridColumn:"1/-1"}}><span>Medical conditions (optional — helps AI give better advice)</span><textarea value={data.profile.medicalConditions || ""} onChange={(event) => setProfile({ medicalConditions: event.target.value })} placeholder="e.g. Type 2 diabetes, hypertension, high cholesterol, PCOS, thyroid condition…" /></label>
+              </div>
+              {calcBMR(data.profile) > 0 && (
+                <div className="calculation bmr-result">
+                  <div><span>Your BMR (at rest)</span><strong>{calcBMR(data.profile)} kcal</strong></div>
+                  <div><span>Maintenance calories (TDEE)</span><strong>{calcTDEE(data.profile)} kcal</strong></div>
+                  <div><span>For weight loss (−500 kcal)</span><strong>{Math.max(1200, calcTDEE(data.profile) - 500)} kcal</strong></div>
+                </div>
+              )}
+              <button className="primary" onClick={() => {
+                const tdee = calcTDEE(data.profile);
+                if (!tdee) { flash("Fill in sex, age, height, and weight to auto-calculate."); return; }
+                const w = number(data.profile.weight);
+                const cal = data.profile.goalWeight && number(data.profile.goalWeight) < w ? Math.max(1200, tdee - 500) : tdee;
+                const proteinG = Math.round(w * 1.8);
+                const fatG = Math.round(cal * 0.28 / 9);
+                const carbsG = Math.max(50, Math.round((cal - proteinG * 4 - fatG * 9) / 4));
+                setProfile({ calorieTarget: cal, proteinTarget: proteinG, carbsTarget: carbsG, fatTarget: fatG, fiberTarget: 30 });
+                flash("Targets calculated from your profile and goal weight.");
+              }}>Calculate my targets automatically</button>
+            </div>
+
+            <div className="tool-card">
+              <div className="section-heading"><div><span className="eyebrow violet">Step 2 — Daily goals</span><h2>Nutrition targets</h2></div></div>
+              <p className="helper">Auto-calculated above, or set manually here.</p>
+              <div className="form-grid">
+                <Field label="Daily calorie goal" suffix="kcal" type="number" min="0" value={data.profile.calorieTarget} onChange={(event) => setProfile({ calorieTarget: number(event.target.value) })} />
+                <Field label="Protein goal" suffix="g" type="number" min="0" value={data.profile.proteinTarget} onChange={(event) => setProfile({ proteinTarget: number(event.target.value) })} />
+                <Field label="Carbs goal" suffix="g" type="number" min="0" value={data.profile.carbsTarget} onChange={(event) => setProfile({ carbsTarget: number(event.target.value) })} />
+                <Field label="Fat goal" suffix="g" type="number" min="0" value={data.profile.fatTarget} onChange={(event) => setProfile({ fatTarget: number(event.target.value) })} />
+                <Field label="Fiber goal" suffix="g" type="number" min="0" value={data.profile.fiberTarget} onChange={(event) => setProfile({ fiberTarget: number(event.target.value) })} />
+                <Field label="Water goal" suffix="ml" type="number" min="0" value={data.profile.waterTarget} onChange={(event) => setProfile({ waterTarget: number(event.target.value) })} />
+                <Field label="Session timeout" suffix="minutes" type="number" min="1" max="240" value={data.profile.sessionTimeout} onChange={(event) => setProfile({ sessionTimeout: Math.min(240, Math.max(1, number(event.target.value))) })} />
+              </div>
             </div>
             <div className="tool-card cloud-card">
               <div className="section-heading">
@@ -1822,24 +1882,24 @@ export default function AppV2() {
                 if (window.confirm("Delete all CalTrack data stored in this browser?")) setData(defaultData);
               }}>Delete all local data</button>
             </div>
-            <div className="privacy-note">
-              <strong>Local-first and honest by design</strong>
-              <p>Your diary, measurements, custom foods, photos, goals, and PIN lock stay saved on this device. The PIN is a practical privacy barrier, not encryption. Cloud backup is optional and separate from the PIN.</p>
-            </div>
+            <div className="helper" style={{fontSize:"11px",padding:"0 4px"}}>Your data lives on this device. Cloud backup is optional. The PIN is a screen lock only.</div>
           </section>
         )}
       </main>
 
       <nav className="bottom-nav" aria-label="Primary navigation">
         {[
-          ["diary", "Today"],
-          ["add", "Add"],
-          ["tools", "Tools"],
-          ["coach", "Pantry"],
-          ["progress", "Progress"],
-          ["settings", "Settings"],
-        ].map(([key, label]) => (
-          <button key={key} className={tab === key ? "active" : ""} onClick={() => setTab(key)}>{label}</button>
+          ["diary", "Today", "◈"],
+          ["add", "Add", "⊕"],
+          ["tools", "Tools", "⊞"],
+          ["coach", "Pantry", "❧"],
+          ["progress", "Stats", "◎"],
+          ["settings", "Profile", "◉"],
+        ].map(([key, label, icon]) => (
+          <button key={key} className={tab === key ? "active" : ""} onClick={() => setTab(key)}>
+            <span className="nav-icon">{icon}</span>
+            <span className="nav-label">{label}</span>
+          </button>
         ))}
       </nav>
 

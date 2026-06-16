@@ -353,8 +353,9 @@ pre { max-height: 260px; overflow: auto; white-space: pre-wrap; color: #b9b1be; 
   .macro-grid { grid-template-columns: repeat(2, 1fr); }
   .photo-grid { grid-template-columns: repeat(2, 1fr); }
   .cloud-status { grid-template-columns: 1fr; }
-  .activity-row { grid-template-columns: 1fr 72px auto; }
-  .activity-row button { grid-column: 1 / -1; justify-self: end; }
+  .activity-row { grid-template-columns: 1fr 72px auto auto; flex-wrap: wrap; }
+  .burn-badge { grid-column: 1 / -1; }
+  .activity-row button { justify-self: end; }
   .portion-actions, .photo-actions { grid-template-columns: 1fr; }
 }
 
@@ -373,3 +374,51 @@ pre { max-height: 260px; overflow: auto; white-space: pre-wrap; color: #b9b1be; 
   .bottom-nav button { font-size: 9px; padding-block: 9px; }
   .onboarding-steps { grid-template-columns: 1fr; }
 }
+
+/* ─── Nav icons ─── */
+.bottom-nav button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
+.nav-icon { font-size: 16px; line-height: 1; opacity: .55; transition: opacity .2s; }
+.nav-label { font-size: 9px; font-weight: 800; letter-spacing: .3px; }
+.bottom-nav button.active .nav-icon { opacity: 1; }
+
+/* ─── Exercise burn badge ─── */
+.activity-row { grid-template-columns: 1fr 76px auto auto; }
+.burn-badge {
+  border-radius: 99px; background: rgba(135, 223, 176, .12); color: var(--mint);
+  padding: 3px 9px; font-size: 9px; font-weight: 800; white-space: nowrap;
+}
+
+/* ─── Profile / settings ─── */
+.profile-card { background: radial-gradient(circle at 100% 0, rgba(240,67,91,.1), transparent 40%), var(--surface); }
+.bmr-result { background: linear-gradient(135deg, rgba(154,123,255,.12), rgba(135,223,176,.06)); border-color: #3a2f55; }
+.bmr-result strong { color: var(--violet); font-size: 14px; }
+
+/* ─── Coach / motivational cards ─── */
+.coach-card {
+  background:
+    radial-gradient(circle at 5% 0, rgba(154,123,255,.18), transparent 50%),
+    radial-gradient(circle at 95% 100%, rgba(240,67,91,.1), transparent 40%),
+    var(--surface);
+  border-color: #3b3050;
+}
+.coach-card .eyebrow { color: var(--violet); }
+.ai-review-section {
+  background:
+    radial-gradient(circle at 0% 100%, rgba(135,223,176,.1), transparent 45%),
+    var(--surface);
+  border-color: #263d31;
+}
+.ai-review-section .eyebrow { color: var(--mint); }
+
+/* ─── Calorie card enhanced ─── */
+.calorie-card {
+  background:
+    radial-gradient(ellipse at 90% 10%, rgba(240, 67, 91, .28), transparent 38%),
+    radial-gradient(ellipse at 10% 110%, rgba(154, 123, 255, .24), transparent 50%),
+    linear-gradient(145deg, #1a1320, #0b090d 75%);
+}
+
+/* ─── Settings action buttons ─── */
+.settings-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.settings-actions button { flex: 1; min-width: 120px; }
+
