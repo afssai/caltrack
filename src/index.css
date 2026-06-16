@@ -1039,7 +1039,7 @@ input:focus, select:focus, textarea:focus {
 }
 .calorie-equation i { background: var(--accent-good); box-shadow: 0 0 8px rgba(77, 195, 255, .45); }
 .calorie-card:has(.cal-over) .calorie-equation i { background: var(--accent-warm); box-shadow: 0 0 8px rgba(255, 106, 24, .42); }
-.ekg-wrap { opacity: .34; }
+.ekg-wrap { display: none; }
 .ekg-path {
   stroke: var(--accent-good);
   filter: drop-shadow(0 0 8px rgba(77, 195, 255, .26));
@@ -1247,7 +1247,7 @@ input:focus, select:focus, textarea:focus {
 .eyebrow {
   color: var(--accent-good);
   letter-spacing: 1.8px;
-  text-shadow: none;
+  text-shadow: 0 0 10px rgba(77, 195, 255, .35);
 }
 .eyebrow.crimson { color: var(--accent-warm); text-shadow: none; }
 .eyebrow.violet { color: #a99cff; text-shadow: none; }
@@ -1965,5 +1965,68 @@ input:focus, select:focus, textarea:focus {
   .activity-pills button, .check-pill {
     flex: 1;
     min-width: 88px;
+  }
+}
+
+/* ── kill onboarding-card heroBreath pulse ── */
+.onboarding-card {
+  animation: none;
+}
+
+/* ── duration dial ── */
+.duration-dial {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin: 18px 0;
+}
+.dial-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 14px 8px;
+  border-radius: 14px;
+  border: 1.5px solid rgba(246, 241, 225, .1);
+  background: rgba(246, 241, 225, .04);
+  color: var(--ivory);
+  font: 700 20px/1 "Space Grotesk", sans-serif;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.dial-option small {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--muted2);
+  letter-spacing: .5px;
+}
+.dial-option:hover {
+  border-color: rgba(77, 195, 255, .35);
+  background: rgba(77, 195, 255, .06);
+}
+.dial-active {
+  border-color: var(--accent-good);
+  background: rgba(77, 195, 255, .12);
+  color: var(--accent-good);
+}
+.dial-active small {
+  color: var(--accent-good);
+}
+.dial-burn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--muted2);
+  margin-bottom: 4px;
+}
+
+/* ── wider-screen layout fixes ── */
+@media (min-width: 640px) {
+  .app-shell {
+    max-width: 480px;
+    margin: 0 auto;
   }
 }

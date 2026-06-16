@@ -42,20 +42,29 @@ const CONFIDENCE = {
   ai: ["AI Estimate", "confidence-blue"],
 };
 
-function MiniIcon({ type }) {
-  const names = {
-    protein: "egg_alt",
-    carbs: "grain",
-    fat: "water_drop",
-    fiber: "psychiatry",
-    water: "local_drink",
+function MiniIcon({ type, size = 22 }) {
+  const icons = {
+    protein: "egg",
+    carbs: "grains",
+    fat: "drop",
+    fiber: "leaf",
+    water: "drop",
     coffee: "coffee",
-    walk: "directions_walk",
-    swim: "pool",
-    weights: "fitness_center",
-    rest: "hotel",
+    walk: "person-simple-walk",
+    swim: "person-simple-swim",
+    weights: "barbell",
+    rest: "bed",
+    scan: "scan",
+    add: "plus-circle",
+    log: "list-bullets",
+    progress: "chart-line-up",
+    settings: "gear",
+    diary: "calendar-dots",
+    tools: "wrench",
+    coach: "brain",
   };
-  return <span className="material-symbols-rounded" aria-hidden="true">{names[type] || "radio_button_checked"}</span>;
+  const name = icons[type] || "circle";
+  return <i className={`ph-bold ph-${name}`} style={{ fontSize: size }} aria-hidden="true" />;
 }
 const API = {
   openFoodFacts: "/api/open-food-facts",
@@ -955,7 +964,15 @@ export default function AppV2() {
 
   function addWater(amountMl) {
     updateDailyLog({ water: Math.max(0, number(dailyLog.water) + amountMl) });
-    flash(`Added ${Math.round(amountMl)} ml water.`);
+    flash(`+${Math.round(amountMl)} ml water.`);
+  }
+
+  function logCoffeeDirect() {
+    const food = STARTER_FOODS.find((f) => f.id === "starter:espresso") || STARTER_FOODS.find((f) => f.id === "starter:black-coffee");
+    if (!food) return;
+    saveFoodToDiary(food, food.servingGrams, "Snack");
+    // Coffee is a net diuretic — subtract 150ml from hydration
+    updateDailyLog({ water: Math.max(0, number(dailyLog.water) - 150) });
   }
 
   function addActivity(type, minutes = 30) {
@@ -1616,7 +1633,7 @@ export default function AppV2() {
           </svg>
         </div>
         <div className="calorie-copy">
-          <span className="eyebrow">Food budget</span>
+          <span className="eyebrow">Today's energy</span>
           <strong className={caloriePercent >= 100 ? "cal-over" : ""}>{displayCalories}</strong>
           <small>{remaining >= 0 ? "food calories left" : "over food target"}</small>
           <div className="calorie-equation"><span>{Math.round(totals.calories)} food</span><i /><span>{number(data.profile.calorieTarget)} plan</span>{activityCalories > 0 && <><i /><span>{activityCalories} burn</span></>}</div>
@@ -1634,9 +1651,9 @@ export default function AppV2() {
         <section className="top-vitals">
           <div className="vitals-left">
             <div className="hydration-glass-card">
-              <button className="glass-button" onClick={() => addWater(250)} aria-label="Add water 250ml">
+              <button className="glass-button" onClick={() => addWater(250)} aria-label="Add 250ml water">
                 <span className="glass" style={{ "--fill": `${hydrationPercent}%` }}>
-                  <MiniIcon type="water" />
+                  <i className="ph-bold ph-drop" style={{ fontSize: 20 }} aria-hidden="true" />
                 </span>
                 <div>
                   <small className="vitals-label">Water</small>
@@ -1644,14 +1661,14 @@ export default function AppV2() {
                 </div>
               </button>
             </div>
-            <div className="coffee-card" data-count={coffeeCount}>
-              <button className="glass-button" onClick={() => coffeeFood && openLogFood(coffeeFood)} aria-label="Log coffee">
+            <div className="coffee-card" data-count={Math.min(coffeeCount, 6)}>
+              <button className="glass-button" onClick={logCoffeeDirect} aria-label="Log coffee">
                 <span className="glass glass-coffee" style={{ "--fill": `${Math.min(100, coffeeCount * 25)}%` }}>
-                  <MiniIcon type="coffee" />
+                  <i className="ph-bold ph-coffee" style={{ fontSize: 20 }} aria-hidden="true" />
                 </span>
                 <div>
                   <small className="vitals-label">Coffee</small>
-                  <span>{coffeeCount} today</span>
+                  <span>{coffeeCount > 0 ? `${coffeeCount} today` : "Tap to log"}</span>
                 </div>
               </button>
             </div>
@@ -1659,9 +1676,10 @@ export default function AppV2() {
           <div className="top-activity-icons">
             {ACTIVITY_PRESETS.map((item) => {
               const minutes = activityMinutesByType[item.type] || 0;
+              const iconType = item.label === "Swim" ? "swim" : item.label === "Weights" ? "weights" : "walk";
               return (
-                <button className="top-activity-button" aria-label={`Add ${item.label}`} key={item.type} onClick={() => openActivity(item.type, item.minutes)}>
-                  <MiniIcon type={item.label === "Swim" ? "swim" : item.label === "Weights" ? "weights" : "walk"} />
+                <button className="top-activity-button" aria-label={`Log ${item.label}`} key={item.type} onClick={() => openActivity(item.type, item.minutes)}>
+                  <MiniIcon type={iconType} size={26} />
                   <span>{minutes ? `${minutes}m` : item.label}</span>
                 </button>
               );
@@ -2356,21 +2374,25 @@ export default function AppV2() {
 
       {activityDraft && (
         <div className="modal-backdrop" onClick={() => setActivityDraft(null)}>
-          <section className="modal compact-modal" role="dialog" aria-modal="true" aria-labelledby="activity-title" onClick={(event) => event.stopPropagation()}>
-            <span className="eyebrow">Activity time</span>
-            <h2 id="activity-title">{activityDraft.type}</h2>
-            <div className="portion-actions">
-              {[15, 30, 45, 60].map((minutes) => (
-                <button className="secondary" key={minutes} onClick={() => setActivityDraft((current) => ({ ...current, minutes }))}>{minutes}m</button>
+          <section className="modal activity-modal" role="dialog" aria-modal="true" aria-labelledby="activity-title" onClick={(event) => event.stopPropagation()}>
+            <span className="eyebrow">{activityDraft.type}</span>
+            <h2 id="activity-title">How long?</h2>
+            <div className="duration-dial">
+              {[10, 15, 20, 30, 45, 60, 75, 90].map((min) => (
+                <button
+                  key={min}
+                  className={`dial-option${number(activityDraft.minutes) === min ? " dial-active" : ""}`}
+                  onClick={() => setActivityDraft((c) => ({ ...c, minutes: min }))}
+                >{min}<small>min</small></button>
               ))}
             </div>
-            <Field label="Duration" suffix="min" type="number" min="1" value={activityDraft.minutes} onChange={(event) => setActivityDraft((current) => ({ ...current, minutes: event.target.value }))} />
-            <div className="calculation">
-              <div><span>Burn</span><strong>~{calcBurnedCalories(activityDraft.type, number(activityDraft.minutes), number(data.profile.weight))} kcal</strong></div>
+            <div className="dial-burn">
+              <i className="ph-bold ph-fire" style={{ fontSize: 18, color: "var(--accent-warm)" }} />
+              <span>~{calcBurnedCalories(activityDraft.type, number(activityDraft.minutes), number(data.profile.weight))} kcal burned</span>
             </div>
             <div className="modal-actions">
               <button className="secondary" onClick={() => setActivityDraft(null)}>Cancel</button>
-              <button className="primary" onClick={confirmActivity}>Save</button>
+              <button className="primary" onClick={confirmActivity}>Log it</button>
             </div>
           </section>
         </div>
