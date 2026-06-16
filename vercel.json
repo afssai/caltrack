@@ -12,7 +12,7 @@
         { "key": "Permissions-Policy", "value": "camera=(self)" },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' blob: https://fr.openfoodfacts.org https://world.openfoodfacts.org https://cdn.jsdelivr.net; script-src 'self' blob: https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' blob:; child-src 'self' blob:"
+          "value": "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' blob: https://mlztungodoqofuvykwpt.supabase.co wss://mlztungodoqofuvykwpt.supabase.co https://fr.openfoodfacts.org https://world.openfoodfacts.org https://cdn.jsdelivr.net; script-src 'self' blob: https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' blob:; child-src 'self' blob:"
         }
       ]
     }

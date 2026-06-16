@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createWorker } from "tesseract.js";
 import {
+  checkSupabaseConnection,
   getCurrentSession,
   optimizeImage,
   readSyncStatus,
@@ -455,6 +456,7 @@ export default function AppV2() {
   const [authEmail, setAuthEmail] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [online, setOnline] = useState(() => navigator.onLine);
+  const [cloudHealth, setCloudHealth] = useState({ status: "unchecked", message: "Not checked yet." });
   const [onboardingDismissed, setOnboardingDismissed] = useState(
     () => localStorage.getItem("caltrack.v2.onboarding") === "dismissed",
   );
@@ -493,6 +495,28 @@ export default function AppV2() {
       window.removeEventListener("offline", update);
     };
   }, []);
+
+  useEffect(() => {
+    if (!supabaseConfig.configured) {
+      setCloudHealth({ status: "missing-config", message: "Supabase environment variables are not configured." });
+      return undefined;
+    }
+    if (!online) {
+      setCloudHealth({ status: "offline", message: "Browser is offline. Local mode is active." });
+      return undefined;
+    }
+    let cancelled = false;
+    async function check() {
+      try {
+        const result = await checkSupabaseConnection();
+        if (!cancelled) setCloudHealth({ status: result.authenticated ? "authenticated" : "reachable", message: result.authenticated ? "Supabase Auth is reachable and a session is active." : "Supabase Auth is reachable. Sign in to sync." });
+      } catch (error) {
+        if (!cancelled) setCloudHealth({ status: "error", message: error.message || "Supabase connection failed." });
+      }
+    }
+    check();
+    return () => { cancelled = true; };
+  }, [online, cloudSession?.user?.id]);
 
   useEffect(() => {
     if (!cloudSession?.user?.id || !syncStatus.enabled || !online || syncing) return undefined;
@@ -550,8 +574,10 @@ export default function AppV2() {
     setSyncing(true);
     try {
       await sendMagicLink(authEmail.trim());
+      setCloudHealth({ status: "reachable", message: "Supabase accepted the magic-link request. Check your email." });
       flash("Check your email for the Supabase sign-in link.");
     } catch (error) {
+      setCloudHealth({ status: "error", message: error.message || "Could not send sign-in link." });
       flash(error.message || "Could not send sign-in link.");
     } finally {
       setSyncing(false);
@@ -1454,7 +1480,7 @@ export default function AppV2() {
             <div className="tool-card cloud-card">
               <div className="section-heading">
                 <div><span className="eyebrow violet">Optional cloud sync</span><h2>Supabase backup & sync</h2></div>
-                <span className="feature-badge">{online ? "Online" : "Offline"}</span>
+                <span className="feature-badge">{cloudHealth.status === "authenticated" ? "Signed in" : cloudHealth.status === "reachable" ? "Connected" : online ? "Online" : "Offline"}</span>
               </div>
               <p className="helper">
                 Local storage remains the source of truth on this device. Supabase sync is optional, uses the publishable key only,
@@ -1462,6 +1488,12 @@ export default function AppV2() {
               </p>
               {!supabaseConfig.configured && (
                 <div className="form-error">Supabase publishable key is missing. Set VITE_SUPABASE_PUBLISHABLE_KEY in the deployment environment.</div>
+              )}
+              {supabaseConfig.configured && (
+                <div className={`cloud-health ${cloudHealth.status === "error" ? "bad" : "good"}`}>
+                  <strong>Cloud sync status</strong>
+                  <span>{cloudHealth.message}</span>
+                </div>
               )}
               {cloudSession?.user ? (
                 <>

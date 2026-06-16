@@ -269,6 +269,10 @@ hr { width: 100%; border: 0; border-top: 1px solid var(--border); margin: 10px 0
 .coach-item p { margin: 4px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .portion-actions, .photo-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
 .cloud-card { background: radial-gradient(circle at 100% 0, rgba(135,223,176,.1), transparent 35%), var(--surface); }
+.cloud-health { display: grid; gap: 3px; border: 1px solid #274a35; border-radius: 14px; background: #0d1a12; padding: 12px; }
+.cloud-health.bad { border-color: #5b2630; background: #211014; }
+.cloud-health strong { font-size: 12px; }
+.cloud-health span { color: var(--muted); font-size: 11px; line-height: 1.45; }
 .cloud-status { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .cloud-status div { min-width: 0; border: 1px solid var(--border-soft); border-radius: 14px; background: #0a080c; padding: 12px; }
 .cloud-status span, .cloud-status strong { display: block; }

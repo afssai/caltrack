@@ -32,6 +32,26 @@ function throwIfError(error, fallback = "Supabase request failed.") {
   if (error) throw new Error(error.message || fallback);
 }
 
+function friendlyNetworkError(error) {
+  if (error?.message === "Failed to fetch" || error instanceof TypeError) {
+    return new Error(
+      "Could not reach Supabase. Check the deployment Content-Security-Policy, network connection, and that the Supabase project URL is allowed.",
+    );
+  }
+  return error;
+}
+
+export async function checkSupabaseConnection() {
+  assertConfigured();
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    throwIfError(error, "Could not reach Supabase Auth.");
+    return { ok: true, authenticated: Boolean(data.session), session: data.session };
+  } catch (error) {
+    throw friendlyNetworkError(error);
+  }
+}
+
 export async function getCurrentSession() {
   if (!supabase) return null;
   const { data, error } = await supabase.auth.getSession();
@@ -45,13 +65,18 @@ export async function getCurrentSession() {
 export async function sendMagicLink(email) {
   assertConfigured();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Enter a valid email address.");
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: {
-      emailRedirectTo: window.location.href.split("#")[0],
-    },
-  });
-  throwIfError(error, "Could not send sign-in link.");
+  try {
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: window.location.href.split("#")[0],
+        shouldCreateUser: true,
+      },
+    });
+    throwIfError(error, "Could not send sign-in link.");
+  } catch (error) {
+    throw friendlyNetworkError(error);
+  }
 }
 
 export async function signOut() {
