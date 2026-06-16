@@ -1,123 +1,122 @@
-# 🥗 CalTrack — Personal Calorie Reference App
+# CalTrack V2
 
-A personal food calorie tracker built for Safari on iPhone.
-300+ foods covering Malaysian, Western, fast food, snacks, drinks, and more.
+CalTrack V2 is a local-first calorie, nutrition, activity, weight, waist, pantry, recipe, and progress tracker built with React and Vite.
 
----
+## Deployment reality
 
-## 📱 How to Access on Your iPhone (Safari)
+GitHub Pages is static. It cannot run secure backend API routes and cannot safely hold USDA or Gemini API keys.
 
-Once deployed, open Safari on your iPhone and go to your GitHub Pages URL:
+Use Vercel as the primary deployment for the full app. GitHub Pages may remain as a static fallback only.
 
-```
-https://YOUR-GITHUB-USERNAME.github.io/caltrack
-```
+### GitHub Pages basic mode
 
-To save it like an app on your home screen:
-1. Open the URL in Safari
-2. Tap the **Share** button (box with arrow at bottom of screen)
-3. Scroll down and tap **"Add to Home Screen"**
-4. Tap **Add** — it will appear as an app icon on your home screen ✅
+Works without a backend:
 
----
+- PIN lock for this browser
+- Local diary, macros, fiber, water, activity, notes, weight, waist, and progress photos
+- Custom foods, pantry ingredients, recipes, package calculator, and backup export/import
+- Browser OCR with Tesseract.js
+- Open Food Facts search and barcode lookup through public frontend-safe endpoints
+- Supabase cloud sync can work on any host if `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and the Supabase migration are configured
 
-## 🚀 How to Deploy (Step-by-Step)
+Does not include:
 
-### Step 1 — Create a GitHub account
-Go to [github.com](https://github.com) and sign up if you don't have one.
+- USDA FoodData Central search
+- Gemini analysis
+- Any server-protected API key feature
 
-### Step 2 — Create a new repository
-1. Click the **+** button (top right) → **New repository**
-2. Name it exactly: `caltrack`
-3. Set to **Public**
-4. Click **Create repository**
+### Vercel full mode
 
-### Step 3 — Upload the files
-**Option A — GitHub web upload (easiest, no coding):**
-1. On your new repo page, click **"uploading an existing file"**
-2. Drag and drop ALL the files and folders from this zip
-3. Make sure you include hidden files: `.github/` folder and `.gitignore`
-4. Click **Commit changes**
+Works with backend API routes:
 
-**Option B — Using Terminal (if you know Git):**
+- Everything in GitHub Pages basic mode
+- `/api/usda` for USDA FoodData Central search
+- `/api/gemini` for optional Gemini nutrition and meal/photo analysis
+
+API keys are read only from Vercel environment variables:
+
+- `USDA_API_KEY`
+- `GEMINI_API_KEY` optional
+
+No USDA or Gemini key is stored in frontend code or browser storage.
+
+## Security model
+
+The browser PIN is a practical privacy barrier, not encryption. Diary data, photos, goals, and the salted PIN hash remain in browser storage and can be accessed by someone with browser/developer access to the device. Use device encryption and a locked operating-system account for stronger protection.
+
+The app does not claim to be hack proof.
+
+## Local run
+
 ```bash
-cd caltrack
-git init
-git add .
-git commit -m "Initial deploy"
-git branch -M main
-git remote add origin https://github.com/YOUR-USERNAME/caltrack.git
-git push -u origin main
+npm install
+npm run build
+npm run preview
 ```
 
-### Step 4 — Enable GitHub Pages
-1. Go to your repo → **Settings** tab
-2. Click **Pages** in the left sidebar
-3. Under **Source**, select **GitHub Actions**
-4. Click **Save**
+For local full-mode API testing, set environment variables before starting the preview server:
 
-### Step 5 — Wait for deployment
-1. Go to the **Actions** tab in your repo
-2. You'll see a workflow running — wait ~2 minutes for it to finish ✅
-3. Once done, your app is live at:
-   `https://YOUR-USERNAME.github.io/caltrack`
-
----
-
-## 🔄 How to Update the App
-
-Whenever you want to add new foods or make changes:
-1. Edit `src/App.jsx` on GitHub (click the file → pencil icon)
-2. Commit the change
-3. GitHub Actions will automatically rebuild and redeploy in ~2 minutes
-
----
-
-## 🗂 Project Structure
-
-```
-caltrack/
-├── .github/
-│   └── workflows/
-│       └── deploy.yml        ← Auto-deploy to GitHub Pages
-├── public/
-│   └── icon.svg              ← App icon
-├── src/
-│   ├── App.jsx               ← Main app + all food data (edit here)
-│   ├── main.jsx              ← Entry point
-│   └── index.css             ← Global styles
-├── index.html                ← HTML shell with iOS meta tags
-├── vite.config.js            ← Build config
-├── package.json              ← Dependencies
-├── .gitignore                ← Ignored files
-└── README.md                 ← This file
+```powershell
+$env:USDA_API_KEY="your-usda-key"
+$env:GEMINI_API_KEY="your-gemini-key"
+npm run preview
 ```
 
----
+The local preview server serves the built app at `http://localhost:4173`.
 
-## ⚙️ Your Profile Settings
+## Vercel setup
 
-Edit these values at the top of `src/App.jsx` to update your targets:
+1. Import this repository into Vercel.
+2. Set the framework preset to Vite.
+3. Use build command `npm run build`.
+4. Use output directory `dist`.
+5. Add environment variable `VITE_SUPABASE_URL`.
+6. Add environment variable `VITE_SUPABASE_PUBLISHABLE_KEY`.
+7. Add environment variable `USDA_API_KEY`.
+8. Optionally add `GEMINI_API_KEY`.
+9. Deploy.
 
-```js
-const TDEE_BASE = 2360;   // Your daily calorie budget
-const SWIM_BONUS = 600;   // Extra calories on swim days
-const WALK_BONUS = 350;   // Extra calories on incline walk days
+## Supabase setup
+
+Run the SQL migration in `supabase/migrations/202606160001_caltrack_schema.sql` against the Supabase project:
+
+- creates user-owned tables for profiles, diary entries, daily logs, measurements, custom foods, pantry, recipes, recipe items, progress photos, and sync state
+- enables Row Level Security on every table
+- adds user-only RLS policies
+- creates the private `progress-photos` storage bucket
+- adds storage policies so users can only access files under their own user ID path
+
+The frontend uses only the Supabase publishable key:
+
+```bash
+VITE_SUPABASE_URL=https://mlztungodoqofuvykwpt.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 ```
 
----
+Do not put service-role or secret keys in the frontend.
 
-## ➕ How to Add a New Food
+Supabase Auth is optional and separate from the local PIN. CalTrack uses email magic links for cloud sync. Existing localStorage data is not deleted during migration.
 
-Open `src/App.jsx` and add a line inside the `foods` array:
+Implemented in code:
 
-```js
-{ cat: "🇲🇾 Malaysian Mains", icon: "🍛", name: "Your Food Name", cal: 300, note: "Short note", traffic: "yellow" },
-```
+- Supabase client in `src/lib/supabase.js`
+- email magic-link auth UI in Settings
+- manual "Migrate / sync now" flow
+- localStorage fallback when Supabase is not configured or offline
+- Supabase table upserts/pulls for diary, logs, measurements, custom foods, pantry, recipes, recipe items, progress photos, profile, and sync state
+- WebP progress-photo optimization before local save/upload
 
-- `traffic` options: `"green"` (safe) / `"yellow"` (moderate) / `"red"` (avoid)
-- `cat` must match an existing category exactly (copy from an existing entry)
+Not implemented yet:
 
----
+- Google Drive backup
+- background sync through a service worker
+- encrypted cloud storage
+- automated conflict-resolution UI beyond preserving local data and merging by IDs
 
-Built with React + Vite. Deployed via GitHub Pages.
+## Honest limitations
+
+- OCR can be wrong, especially for curved, blurry, low-resolution, or poorly lit labels. It only provides suggestions.
+- Gemini is optional. Without `GEMINI_API_KEY`, the app still works and Gemini requests return an unavailable message.
+- Restaurant meal/photo analysis is estimate-only and must be manually reviewed.
+- Open Food Facts availability and data quality depend on its public service.
+- Progress photos are optimized to WebP before local save and Supabase upload, but local browser storage can still fill up. Export backups regularly.

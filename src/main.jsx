@@ -8,3 +8,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <AppV2 />
   </React.StrictMode>
 )
+
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {})
+}
