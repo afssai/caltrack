@@ -933,11 +933,14 @@ body::after { display: none; }
   margin-bottom: 12px;
 }
 .brand-mark {
-  color: var(--ivory);
-  background: none;
-  -webkit-text-fill-color: currentColor;
-  letter-spacing: 4px;
-  filter: none;
+  font: 700 28px/1 "Syne", sans-serif;
+  letter-spacing: 10px;
+  text-transform: uppercase;
+  background: linear-gradient(90deg, #ffe8a0 0%, #ffd060 40%, #ffb830 70%, #ff9a20 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 12px rgba(255, 190, 40, .35));
   animation: none;
 }
 .material-symbols-rounded {
@@ -983,6 +986,7 @@ input, select, textarea {
   color: var(--ivory);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.035);
   backdrop-filter: blur(18px);
+  font-size: 16px !important; /* iOS Safari: prevents auto-zoom on input focus */
 }
 input:hover, select:hover, textarea:hover { background: rgba(246, 241, 225, .06); }
 input:focus, select:focus, textarea:focus {
@@ -1024,13 +1028,13 @@ input:focus, select:focus, textarea:focus {
   text-shadow: 0 0 12px rgba(255, 106, 24, .28);
 }
 .calorie-copy > strong {
-  font: 400 clamp(72px, 20vw, 116px)/.8 "Bebas Neue", sans-serif;
-  letter-spacing: 3px;
-  background: linear-gradient(160deg, var(--ivory) 20%, var(--accent-warm) 80%);
+  font: 400 clamp(58px, 15vw, 92px)/.85 "Bebas Neue", sans-serif;
+  letter-spacing: 2px;
+  background: linear-gradient(160deg, #fffbe8 0%, #ffd060 35%, #ffaa30 65%, #ff7c18 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  filter: drop-shadow(0 0 18px rgba(255, 106, 24, .28));
+  filter: drop-shadow(0 0 20px rgba(255, 180, 30, .32));
 }
 .calorie-copy > strong.cal-over {
   background: linear-gradient(160deg, #ff8c42 10%, var(--accent-danger) 85%);
@@ -1713,8 +1717,31 @@ input:focus, select:focus, textarea:focus {
 }
 .day-mode-row {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.day-mode-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 6px;
+  border-radius: 14px;
+  border: 1.5px solid rgba(246, 241, 225, .08);
+  background: rgba(246, 241, 225, .04);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .4px;
+  cursor: pointer;
+  transition: background .2s, border-color .2s, color .2s;
+}
+.day-mode-pill span { line-height: 1.2; text-align: center; }
+.day-mode-pill.active {
+  background: var(--pill-bg, rgba(255,208,60,.18));
+  border-color: var(--pill-color, #ffd060);
+  color: var(--pill-color, #ffd060);
+  box-shadow: 0 0 12px var(--pill-bg, rgba(255,208,60,.12));
 }
 .today-log-card,
 .log-day-card {

@@ -28,10 +28,10 @@ const ACTIVITY_PRESETS = [
   { type: "Strength training", label: "Weights", minutes: 45 },
 ];
 const HEALTH_FLAGS = [
-  ["normalDay", "Normal", Sun],
-  ["restDay", "Rest", Moon],
-  ["lowEnergy", "Low energy", BatteryLow],
-  ["sick", "Sick", Thermometer],
+  ["normalDay", "Normal", Sun, "#ffd060", "rgba(255,208,60,.18)"],
+  ["restDay", "Rest", Moon, "#7fb3ff", "rgba(127,179,255,.18)"],
+  ["lowEnergy", "Low energy", BatteryLow, "#ffb347", "rgba(255,179,71,.18)"],
+  ["sick", "Sick", Thermometer, "#ff6b6b", "rgba(255,107,107,.18)"],
 ];
 const QUICK_FOOD_IDS = ["starter:banana", "starter:egg", "starter:fried-eggs", "starter:chicken-breast", "starter:white-rice"];
 const EMPTY_NUTRITION = { calories: "", protein: "", carbs: "", fat: "", fiber: "" };
@@ -1824,11 +1824,20 @@ export default function AppV2() {
                   <p className="helper">Add medications in Profile once, then they become a daily checklist here.</p>
                 )}
                 <div className="day-mode-row">
-                  {HEALTH_FLAGS.map(([key, label, FlagIcon]) => (
-                    <button className={dailyLog.healthFlags?.[key] ? "check-pill active" : "check-pill"} key={key} onClick={() => setDayMode(key)}>
-                      <FlagIcon size={14} strokeWidth={1.8} />{label}
-                    </button>
-                  ))}
+                  {HEALTH_FLAGS.map(([key, label, FlagIcon, color, bg]) => {
+                    const active = dailyLog.healthFlags?.[key];
+                    return (
+                      <button
+                        key={key}
+                        className={`day-mode-pill${active ? " active" : ""}`}
+                        onClick={() => setDayMode(key)}
+                        style={active ? { "--pill-color": color, "--pill-bg": bg } : {}}
+                      >
+                        <FlagIcon size={20} strokeWidth={1.7} style={{ color: active ? color : undefined }} />
+                        <span>{label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
                 <textarea value={dailyLog.notes} onChange={(event) => updateDailyLog({ notes: event.target.value.slice(0, 2000) })} placeholder="Anything worth remembering today? hunger, sleep, pain, mood..." />
               </div>
