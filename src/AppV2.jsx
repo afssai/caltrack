@@ -534,7 +534,7 @@ function LockScreen({ mode, onUnlock, onSetup, owner }) {
   return (
     <div className="lock-shell">
       <form className="lock-card" onSubmit={submit}>
-        <span className="brand-mark">PULSE</span>
+        <img src="./LOGO1.png" alt="PULSE" className="brand-logo lock-logo" />
         <h1>{mode === "setup" ? "Create your PIN" : "Welcome back"}</h1>
         {mode === "unlock" && owner && (
           <p style={{ color: "var(--blue2)", fontWeight: 600, fontSize: "12px", margin: "-4px 0 0" }}>
@@ -1662,7 +1662,7 @@ export default function AppV2() {
     <div className="app-shell">
       <header className="topbar">
         <div>
-          <span className="brand-mark">PULSE</span>
+          <img src="./LOGO2.png" alt="PULSE" className="brand-logo app-logo" />
           {tab === "diary" && <p className="top-message">{todayMessage}</p>}
         </div>
       </header>

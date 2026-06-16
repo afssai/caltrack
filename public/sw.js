@@ -1,4 +1,4 @@
-const CACHE = "caltrack-v2-shell";
+const CACHE = "pulse-v2-shell";
 self.addEventListener("install", (event) => event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(["./", "./index.html", "./manifest.webmanifest"]))));
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 self.addEventListener("fetch", (event) => {

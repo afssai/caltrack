@@ -932,6 +932,19 @@ body::after { display: none; }
   align-items: center;
   margin-bottom: 12px;
 }
+.brand-logo {
+  display: block;
+  height: 36px;
+  width: auto;
+  object-fit: contain;
+}
+.lock-logo {
+  height: 52px;
+  margin-bottom: 8px;
+}
+.app-logo {
+  height: 32px;
+}
 .brand-mark {
   font: 700 28px/1 "Syne", sans-serif;
   letter-spacing: 10px;
