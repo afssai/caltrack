@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Droplets, Coffee, Footprints, Dumbbell, Flame, Plus, List, CalendarDays, ScanLine, User, Activity, Waves, Beef, Wheat, Leaf, Droplet, Trash2, Timer, Zap, Sun, Moon, BatteryLow, Thermometer, Brain, Camera, Package, BookOpen, Scale, Image, HeartPulse, Stethoscope } from "lucide-react";
+import { Droplets, Coffee, Footprints, Dumbbell, Flame, Plus, List, CalendarDays, ScanLine, User, Activity, Waves, Beef, Wheat, Leaf, Droplet, Trash2, Timer, Zap, Sun, Moon, BatteryLow, Thermometer, Brain, Camera, Package, BookOpen, Scale, Image, HeartPulse, Stethoscope, ChefHat, SlidersHorizontal, Search, ClipboardList } from "lucide-react";
 import { createWorker } from "tesseract.js";
 import {
   cacheFoodResult,
@@ -1809,7 +1809,7 @@ export default function AppV2() {
 
               <div className="quick-card health-card">
                 <div className="quick-card-head">
-                  <div><span className="eyebrow"><Stethoscope size={11} style={{verticalAlign:"middle",marginRight:3}} />Health check</span><h2><HeartPulse size={18} style={{verticalAlign:"middle",marginRight:6,color:"var(--accent-danger)"}} />Meds & how you feel</h2></div>
+                  <div><span className="eyebrow">Health check</span><h2><HeartPulse size={18} style={{verticalAlign:"middle",marginRight:6,color:"var(--accent-danger)"}} />Meds & how you feel</h2></div>
                   <button className="secondary compact" onClick={() => setTab("settings")}>Edit meds</button>
                 </div>
                 {medicationList.length ? (
@@ -1883,7 +1883,7 @@ export default function AppV2() {
           <section className="panel stack log-panel">
             <div className="section-heading">
               <div>
-                <span className="eyebrow crimson"><BookOpen size={11} style={{verticalAlign:"middle",marginRight:3}} />{date === localDate() ? "Today" : date}</span>
+                <span className="eyebrow crimson">{date === localDate() ? "Today" : date}</span>
                 <h2><BookOpen size={18} style={{verticalAlign:"middle",marginRight:6,color:"var(--accent-warm)"}} />Daily log</h2>
               </div>
               <button className="primary compact" onClick={() => setTab("add")}>Add food</button>
@@ -1957,7 +1957,7 @@ export default function AppV2() {
         {tab === "add" && (
           <section className="panel stack add-panel">
             <div className="section-heading">
-              <div><span className="eyebrow">Quick add</span><h2>What did you eat?</h2></div>
+              <div><span className="eyebrow">Quick add</span><h2><Search size={18} style={{verticalAlign:"middle",marginRight:6,color:"var(--accent-good)"}} />What did you eat?</h2></div>
               <button className="secondary compact" onClick={() => setTab("tools")}>Scan / AI</button>
             </div>
             <div className="search-line">
@@ -1980,7 +1980,7 @@ export default function AppV2() {
 
             <hr />
             <div className="section-heading">
-              <div><span className="eyebrow crimson">AI-powered</span><h2>Describe your meal</h2></div>
+              <div><span className="eyebrow crimson">AI-powered</span><h2><Brain size={18} style={{verticalAlign:"middle",marginRight:6,color:"#a99cff"}} />Describe your meal</h2></div>
             </div>
             <p className="helper">Type what you ate in plain English — AI will estimate the calories and nutrition for you to review.</p>
             <div className="search-line">
@@ -1995,7 +1995,7 @@ export default function AppV2() {
 
             <hr />
             <div className="section-heading">
-              <div><span className="eyebrow violet">AI-powered</span><h2>Snap your food</h2></div>
+              <div><span className="eyebrow violet">AI-powered</span><h2><Camera size={18} style={{verticalAlign:"middle",marginRight:6,color:"#4dc3ff"}} />Snap your food</h2></div>
             </div>
             <p className="helper">Take a photo of your meal or plate. AI will estimate the calories and nutrition — you can review and adjust before logging.</p>
             <div className="scanner-actions">
@@ -2077,7 +2077,7 @@ export default function AppV2() {
           <section className="panel stack tools-panel">
             <div className="tool-card scan-card">
               <div className="section-heading">
-                <div><span className="eyebrow">Scan & estimate</span><h2>When it is not a simple food</h2></div>
+                <div><span className="eyebrow">Scan & estimate</span><h2><ScanLine size={18} style={{verticalAlign:"middle",marginRight:6,color:"var(--accent-good)"}} />When it is not a simple food</h2></div>
               </div>
               <p className="helper">Use these for packaged food, restaurant meals, nutrition labels, or unclear portions. Simple foods belong in Add.</p>
               <div className="barcode-line">
@@ -2100,7 +2100,7 @@ export default function AppV2() {
 
             <details className="tool-card ai-review-section tool-drawer">
               <summary>
-                <div><span className="eyebrow violet"><Brain size={11} style={{verticalAlign:"middle",marginRight:3}} />AI Tools</span><strong><Brain size={15} style={{verticalAlign:"middle",marginRight:5,color:"#a99cff"}} />AI estimate or day review</strong></div>
+                <div><span className="eyebrow violet">AI Tools</span><strong><Brain size={15} style={{verticalAlign:"middle",marginRight:5,color:"#a99cff"}} />AI estimate or day review</strong></div>
                 <button className="secondary compact" disabled={busy} onClick={getDailyAiReview}>{busy ? "Reviewing..." : "Review today"}</button>
               </summary>
               <div className="search-line">
@@ -2128,7 +2128,7 @@ export default function AppV2() {
 
             <details className="tool-card ocr-card tool-drawer">
               <summary>
-                <div><span className="eyebrow violet"><Camera size={11} style={{verticalAlign:"middle",marginRight:3}} />Scanner</span><strong><Camera size={15} style={{verticalAlign:"middle",marginRight:5,color:"#4dc3ff"}} />Nutrition label OCR</strong></div>
+                <div><span className="eyebrow violet">Scanner</span><strong><Camera size={15} style={{verticalAlign:"middle",marginRight:5,color:"#4dc3ff"}} />Nutrition label OCR</strong></div>
                 <span className="feature-badge">Local</span>
               </summary>
               <p className="helper">Take a clear, straight-on nutrition label photo or choose one from your gallery. Tesseract.js reads it locally; verify every extracted value before saving.</p>
@@ -2159,7 +2159,7 @@ export default function AppV2() {
 
             <details className="tool-card package-card tool-drawer">
             <summary>
-              <div><span className="eyebrow crimson"><Package size={11} style={{verticalAlign:"middle",marginRight:3}} />Label calc</span><strong><Package size={15} style={{verticalAlign:"middle",marginRight:5,color:"var(--accent-warm)"}} />Packaged food amount</strong></div>
+              <div><span className="eyebrow crimson">Label calc</span><strong><Package size={15} style={{verticalAlign:"middle",marginRight:5,color:"var(--accent-warm)"}} />Packaged food amount</strong></div>
             </summary>
             <p className="helper">Enter label values per serving, then the package size and amount you actually ate.</p>
             <div className="form-grid">
@@ -2189,7 +2189,7 @@ export default function AppV2() {
 
         {tab === "coach" && (
           <section className="panel stack">
-            <div className="section-heading"><div><span className="eyebrow">Nutrition coach</span><h2>Pantry & smart recipes</h2></div></div>
+            <div className="section-heading"><div><span className="eyebrow">Nutrition coach</span><h2><ChefHat size={18} style={{verticalAlign:"middle",marginRight:6,color:"var(--accent-good)"}} />Pantry & smart recipes</h2></div></div>
             <div className="coach-card">
               <span className="eyebrow violet">Today</span>
               <h2>Data-based guidance</h2>
@@ -2198,7 +2198,7 @@ export default function AppV2() {
             </div>
 
             <div className="tool-card pantry-card">
-              <div className="section-heading"><div><span className="eyebrow crimson">What's in your kitchen</span><h2>Pantry</h2></div></div>
+              <div className="section-heading"><div><span className="eyebrow crimson">What's in your kitchen</span><h2><ClipboardList size={18} style={{verticalAlign:"middle",marginRight:6,color:"var(--accent-warm)"}} />Pantry</h2></div></div>
               <p className="helper">Just type what you have — nutrition is optional. You can fill it in later.</p>
               <div className="form-grid">
                 <Field label="Ingredient name" value={pantryDraft.name} onChange={(event) => setPantryDraft({ ...pantryDraft, name: event.target.value })} />
@@ -2243,7 +2243,7 @@ export default function AppV2() {
 
         {tab === "progress" && (
           <section className="panel stack">
-            <div className="section-heading"><div><span className="eyebrow"><Scale size={11} style={{verticalAlign:"middle",marginRight:3}} />By date</span><h2><Scale size={18} style={{verticalAlign:"middle",marginRight:6,color:"var(--accent-good)"}} />Weight & waist</h2></div></div>
+            <div className="section-heading"><div><span className="eyebrow">By date</span><h2><Scale size={18} style={{verticalAlign:"middle",marginRight:6,color:"var(--accent-good)"}} />Weight & waist</h2></div></div>
             <div className="insight-card">
               <div className="insight-heading"><div><span className="eyebrow violet">Recent entries</span><h3>Weight trend</h3></div><strong>{latestMeasurement?.weight || "--"}<small>{latestMeasurement?.weight ? " kg" : ""}</small></strong></div>
               <WeightTrend measurements={data.measurements} />
@@ -2277,7 +2277,7 @@ export default function AppV2() {
               {!sortedMeasurements.length && <p className="empty">No measurements saved yet.</p>}
             </div>
             <div className="tool-card">
-              <div className="section-heading"><div><span className="eyebrow violet"><Image size={11} style={{verticalAlign:"middle",marginRight:3}} />Stored locally</span><h2><Camera size={18} style={{verticalAlign:"middle",marginRight:6,color:"#a99cff"}} />Progress photos</h2></div></div>
+              <div className="section-heading"><div><span className="eyebrow violet">Stored locally</span><h2><Camera size={18} style={{verticalAlign:"middle",marginRight:6,color:"#a99cff"}} />Progress photos</h2></div></div>
               <p className="helper">Save front, side, and optional back photos. Images are limited to 1.5 MB each and included in backups.</p>
               <div className="photo-actions">{["Front", "Side", "Back"].map((view) => <label className="secondary file-button" key={view}>{view}<input type="file" accept="image/*" capture="environment" onChange={(event) => addProgressPhoto(event.target.files?.[0], view)} /></label>)}</div>
               <div className="photo-grid">{data.progressPhotos.map((photo) => <figure key={photo.id}><img src={photo.dataUrl} alt={`${photo.view} progress on ${photo.date}`} /><figcaption>{photo.view} - {photo.date}</figcaption></figure>)}</div>
@@ -2287,7 +2287,7 @@ export default function AppV2() {
 
         {tab === "settings" && (
           <section className="panel stack">
-            <div className="section-heading"><div><span className="eyebrow">Your profile</span><h2>Settings</h2></div></div>
+            <div className="section-heading"><div><span className="eyebrow">Your profile</span><h2><User size={18} style={{verticalAlign:"middle",marginRight:6,color:"var(--accent-good)"}} />Settings</h2></div></div>
             <div className="today-log-card profile-shortcut-card">
               <div>
                 <span className="eyebrow violet">Home food ideas</span>
@@ -2298,7 +2298,7 @@ export default function AppV2() {
             </div>
 
             <div className="tool-card profile-card">
-              <div className="section-heading"><div><span className="eyebrow crimson">Step 1 — About you</span><h2>Personal profile</h2></div></div>
+              <div className="section-heading"><div><span className="eyebrow crimson">Step 1 — About you</span><h2><User size={18} style={{verticalAlign:"middle",marginRight:6,color:"var(--accent-warm)"}} />Personal profile</h2></div></div>
               <p className="helper">Your stats calculate calorie and macro targets using the Mifflin-St Jeor formula — the same one dietitians use. Leave blank if you prefer to set targets manually.</p>
               <div className="form-grid">
                 <Field label="Your name" value={data.profile.name || ""} onChange={(event) => setProfile({ name: event.target.value })} />
@@ -2333,7 +2333,7 @@ export default function AppV2() {
             </div>
 
             <div className="tool-card">
-              <div className="section-heading"><div><span className="eyebrow violet">Step 2 — Daily goals</span><h2>Nutrition targets</h2></div></div>
+              <div className="section-heading"><div><span className="eyebrow violet">Step 2 — Daily goals</span><h2><SlidersHorizontal size={18} style={{verticalAlign:"middle",marginRight:6,color:"#a99cff"}} />Nutrition targets</h2></div></div>
               <p className="helper">Auto-calculated above, or set manually here.</p>
               <div className="form-grid">
                 <Field label="Daily calorie goal" suffix="kcal" type="number" min="0" value={data.profile.calorieTarget} onChange={(event) => setProfile({ calorieTarget: number(event.target.value) })} />
@@ -2347,7 +2347,7 @@ export default function AppV2() {
             </div>
             <div className="tool-card cloud-card">
               <div className="section-heading">
-                <div><span className="eyebrow violet">Optional backup</span><h2>Cloud backup</h2></div>
+                <div><span className="eyebrow violet">Optional backup</span><h2><Activity size={18} style={{verticalAlign:"middle",marginRight:6,color:"#a99cff"}} />Cloud backup</h2></div>
                 <span className="feature-badge">{!supabaseConfig.configured ? "Local only" : cloudHealth.status === "authenticated" ? "Signed in" : cloudHealth.status === "reachable" ? "Ready" : cloudHealth.status === "offline" ? "Offline" : cloudHealth.status === "error" ? "Needs attention" : "Checking"}</span>
               </div>
               <p className="helper">
@@ -2385,7 +2385,7 @@ export default function AppV2() {
               ) : null}
             </div>
             <div className="tool-card">
-              <div className="section-heading"><div><span className="eyebrow crimson">Privacy</span><h2>{security ? "Change PIN" : "Optional PIN lock"}</h2></div>{security && <button className="secondary compact" onClick={() => setLocked(true)}>Lock now</button>}</div>
+              <div className="section-heading"><div><span className="eyebrow crimson">Privacy</span><h2><Stethoscope size={18} style={{verticalAlign:"middle",marginRight:6,color:"var(--accent-danger)"}} />{security ? "Change PIN" : "Optional PIN lock"}</h2></div>{security && <button className="secondary compact" onClick={() => setLocked(true)}>Lock now</button>}</div>
               <div className="form-grid">{security && <Field label="Current PIN" type="password" inputMode="numeric" value={pinChange.current} onChange={(event) => setPinChange({ ...pinChange, current: event.target.value.replace(/\D/g, "") })} />}<Field label="New PIN" type="password" inputMode="numeric" value={pinChange.next} onChange={(event) => setPinChange({ ...pinChange, next: event.target.value.replace(/\D/g, "") })} /><Field label="Confirm new PIN" type="password" inputMode="numeric" value={pinChange.confirm} onChange={(event) => setPinChange({ ...pinChange, confirm: event.target.value.replace(/\D/g, "") })} /></div>
               <button className="primary" onClick={changePin}>{security ? "Change PIN" : "Create PIN lock"}</button>
             </div>
