@@ -21,7 +21,7 @@ The salted PIN hash is stored in browser localStorage under `caltrack.v2.securit
 
 ## Local Data
 
-CalTrack stores local data in browser storage. This supports offline/private-first use, but local browser storage can be cleared by the user, browser, or device policy.
+PULSE stores local data in browser storage. This supports offline/private-first use, but local browser storage can be cleared by the user, browser, or device policy.
 
 Users should export backups before major changes.
 

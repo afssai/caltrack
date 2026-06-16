@@ -21,6 +21,18 @@ const STORAGE_KEY = "caltrack.v2";
 const SECURITY_KEY = "caltrack.v2.security";
 const MAX_IMAGE_BYTES = 1_500_000;
 const MEALS = ["Breakfast", "Lunch", "Dinner", "Snack"];
+const ACTIVITY_PRESETS = [
+  { type: "Walking", label: "Walk", minutes: 30 },
+  { type: "Swimming", label: "Swim", minutes: 30 },
+  { type: "Strength training", label: "Weights", minutes: 45 },
+];
+const HEALTH_FLAGS = [
+  ["normalDay", "Normal day"],
+  ["restDay", "Rest day"],
+  ["lowEnergy", "Low energy"],
+  ["sick", "Feeling sick"],
+];
+const QUICK_FOOD_IDS = ["starter:banana", "starter:egg", "starter:fried-eggs", "starter:chicken-breast", "starter:white-rice"];
 const EMPTY_NUTRITION = { calories: "", protein: "", carbs: "", fat: "", fiber: "" };
 const CONFIDENCE = {
   off: ["Barcode + Database", "confidence-green"],
@@ -29,6 +41,22 @@ const CONFIDENCE = {
   ocr: ["OCR suggestion", "confidence-orange"],
   ai: ["AI Estimate", "confidence-blue"],
 };
+
+function MiniIcon({ type }) {
+  const names = {
+    protein: "egg_alt",
+    carbs: "grain",
+    fat: "water_drop",
+    fiber: "psychiatry",
+    water: "local_drink",
+    coffee: "coffee",
+    walk: "directions_walk",
+    swim: "pool",
+    weights: "fitness_center",
+    rest: "hotel",
+  };
+  return <span className="material-symbols-rounded" aria-hidden="true">{names[type] || "radio_button_checked"}</span>;
+}
 const API = {
   openFoodFacts: "/api/open-food-facts",
   usda: "/api/usda",
@@ -63,6 +91,7 @@ const defaultData = {
     highestWeight: "",
     activityLevel: "sedentary",
     medicalConditions: "",
+    medications: "",
     calorieTarget: 2000,
     proteinTarget: 130,
     carbsTarget: 220,
@@ -274,6 +303,34 @@ function mergeFoods(...groups) {
   return merged;
 }
 
+function cleanFoodName(name = "") {
+  return String(name)
+    .replace(/\s*\([^)]*\)/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function foodDisplayKey(food) {
+  return cleanFoodName(food.name).toLowerCase();
+}
+
+function simplifyFoods(foods = []) {
+  const priority = { "Saved food": 0, "Custom food": 0, "Local database": 1, "Starter food": 1, "USDA FoodData Central": 2, "Open Food Facts": 3 };
+  const sorted = [...foods].sort((a, b) => (priority[a.source] ?? 9) - (priority[b.source] ?? 9));
+  const byName = new Map();
+  const output = [];
+  for (const food of sorted) {
+    const key = foodDisplayKey(food);
+    if (!key) continue;
+    const isPackaged = food.source === "Open Food Facts" && food.brand;
+    const outputKey = isPackaged ? `${key}:${String(food.brand).toLowerCase()}` : key;
+    if (byName.has(outputKey)) continue;
+    byName.set(outputKey, true);
+    output.push(food);
+  }
+  return output;
+}
+
 function searchSavedFoods(foods, query) {
   const term = query.trim().toLowerCase();
   if (!term) return [];
@@ -284,6 +341,25 @@ function searchSavedFoods(foods, query) {
 
 function searchStarterFoods(query) {
   return searchSavedFoods(STARTER_FOODS, query);
+}
+
+function splitList(value = "") {
+  return String(value)
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function dailyGreeting({ name, remaining, totals, dailyLog, medicationCount }) {
+  const firstName = name?.trim()?.split(/\s+/)[0] || "Kaivan";
+  if (number(totals.calories) === 0 && !number(dailyLog.water) && !(dailyLog.activities || []).length) {
+    return `${firstName}, win the next small choice.`;
+  }
+  if (remaining < 0) return `${firstName}, steady now. Keep the rest light.`;
+  if ((dailyLog.activities || []).length) return `${firstName}, movement is in. Protect protein and water.`;
+  if (medicationCount && (dailyLog.medsTaken || []).length < medicationCount) return `${firstName}, quick meds check when you can.`;
+  if (number(dailyLog.water) < 500) return `${firstName}, add water before the day gets loud.`;
+  return `${firstName}, consistency is doing its quiet work.`;
 }
 
 function parseAiNutrition(text) {
@@ -373,9 +449,11 @@ function Field({ label, suffix, ...props }) {
 
 function Macro({ label, value, target, tone }) {
   const percent = target ? Math.min(100, (number(value) / number(target)) * 100) : 0;
+  const iconType = label.toLowerCase();
   return (
     <div className="macro">
       <div className="macro-top">
+        <span className={`macro-icon ${tone}`}><MiniIcon type={iconType} /></span>
         <strong>{round(value)}g</strong>
         <span>{label}</span>
       </div>
@@ -529,7 +607,7 @@ function ActivityTrend({ logs }) {
 
 export default function AppV2() {
   const [security, setSecurity] = useState(readSecurity);
-  const [locked, setLocked] = useState(() => Boolean(readSecurity()));
+  const [locked, setLocked] = useState(true);
   const [data, setData] = useState(loadData);
   const [date, setDate] = useState(localDate);
   const [tab, setTab] = useState("diary");
@@ -539,7 +617,8 @@ export default function AppV2() {
   const [displayCalories, setDisplayCalories] = useState(0);
   const calAnimRef = useRef(null);
   useEffect(() => {
-    const target = Math.abs(Math.round(data.profile.calorieTarget - (data.diary[date] ? data.diary[date].reduce((s, e) => s + number(e.calories), 0) : 0)));
+    const eaten = data.diary[date] ? data.diary[date].reduce((s, e) => s + number(e.calories), 0) : 0;
+    const target = Math.abs(Math.round(number(data.profile.calorieTarget) - eaten));
     const start = displayCalories;
     const delta = target - start;
     if (Math.abs(delta) < 1) { setDisplayCalories(target); return; }
@@ -572,6 +651,7 @@ export default function AppV2() {
   const [barcode, setBarcode] = useState("");
   const [results, setResults] = useState([]);
   const [selectedFood, setSelectedFood] = useState(null);
+  const [activityDraft, setActivityDraft] = useState(null);
   const [logForm, setLogForm] = useState({ grams: 100, meal: "Breakfast" });
   const [custom, setCustom] = useState({
     name: "",
@@ -723,7 +803,15 @@ export default function AppV2() {
 
   const items = data.diary[date] || [];
   const totals = useMemo(() => totalsFor(items), [items]);
+  const dailyLog = { water: 0, notes: "", activities: [], medsTaken: [], healthFlags: {}, ...(data.dailyLogs[date] || {}) };
+  const activityMinutes = (dailyLog.activities || []).reduce((sum, item) => sum + number(item.minutes), 0);
+  const activityCalories = (dailyLog.activities || []).reduce((sum, item) => sum + calcBurnedCalories(item.type, number(item.minutes), number(data.profile.weight)), 0);
+  const activityMinutesByType = (dailyLog.activities || []).reduce((acc, item) => {
+    acc[item.type] = (acc[item.type] || 0) + number(item.minutes);
+    return acc;
+  }, {});
   const remaining = number(data.profile.calorieTarget) - totals.calories;
+  const estimatedDeficit = Math.max(0, remaining) + activityCalories;
   const caloriePercent = data.profile.calorieTarget
     ? Math.min(100, (totals.calories / number(data.profile.calorieTarget)) * 100)
     : 0;
@@ -732,7 +820,26 @@ export default function AppV2() {
     [data.measurements],
   );
   const latestMeasurement = sortedMeasurements[0];
-  const dailyLog = data.dailyLogs[date] || { water: 0, notes: "", activities: [] };
+  const medicationList = splitList(data.profile.medications);
+  const waterOz = round(number(dailyLog.water) / 29.5735);
+  const hydrationTarget = Math.max(1, number(data.profile.waterTarget) + activityMinutes * 12);
+  const hydrationPercent = Math.min(100, (number(dailyLog.water) / hydrationTarget) * 100);
+  const quickFoods = QUICK_FOOD_IDS.map((id) => STARTER_FOODS.find((food) => food.id === id)).filter(Boolean);
+  const localQueryResults = query.trim()
+    ? simplifyFoods([
+      ...searchSavedFoods(data.customFoods, query),
+      ...searchSavedFoods(STARTER_FOODS, query),
+    ]).slice(0, 8)
+    : [];
+  const quickFoodSuggestions = query.trim()
+    ? localQueryResults.length
+      ? localQueryResults
+      : simplifyFoods(searchSavedFoods(results, query)).slice(0, 6)
+    : quickFoods;
+  const hasLocalResults = localQueryResults.length > 0;
+  const coffeeFood = STARTER_FOODS.find((food) => food.id === "starter:black-coffee");
+  const coffeeCount = items.filter((item) => /coffee|espresso|cappuccino|latte|flat.?white|americano/i.test(item.name || "")).length;
+  const todayMessage = dailyGreeting({ name: data.profile.name, remaining, totals, dailyLog, medicationCount: medicationList.length });
   const recipeTotals = useMemo(() => totalsFor(recipeDraft.items.map((item) => scaleNutrition(item.per100, item.grams))), [recipeDraft.items]);
   const isNewUser = !onboardingDismissed && !Object.values(data.diary).some((entries) => entries.length) && !data.measurements.length;
 
@@ -842,8 +949,54 @@ export default function AppV2() {
   function updateDailyLog(patch) {
     setData((current) => ({
       ...current,
-      dailyLogs: { ...current.dailyLogs, [date]: { water: 0, notes: "", activities: [], ...(current.dailyLogs[date] || {}), ...patch } },
+      dailyLogs: { ...current.dailyLogs, [date]: { water: 0, notes: "", activities: [], medsTaken: [], healthFlags: {}, ...(current.dailyLogs[date] || {}), ...patch } },
     }));
+  }
+
+  function addWater(amountMl) {
+    updateDailyLog({ water: Math.max(0, number(dailyLog.water) + amountMl) });
+    flash(`Added ${Math.round(amountMl)} ml water.`);
+  }
+
+  function addActivity(type, minutes = 30) {
+    updateDailyLog({
+      healthFlags: { ...(dailyLog.healthFlags || {}), normalDay: false, restDay: false },
+      activities: [...(dailyLog.activities || []), { id: makeId(), type, minutes }],
+    });
+    flash(`${type} logged for ${minutes} minutes.`);
+  }
+
+  function openActivity(type, minutes = 30) {
+    setActivityDraft({ type, minutes });
+  }
+
+  function confirmActivity() {
+    if (!activityDraft?.type || number(activityDraft.minutes) <= 0) return flash("Add activity time.");
+    addActivity(activityDraft.type, number(activityDraft.minutes));
+    setActivityDraft(null);
+  }
+
+  function markRestDay() {
+    updateDailyLog({ activities: [], healthFlags: { ...(dailyLog.healthFlags || {}), normalDay: false, restDay: true, lowEnergy: false, sick: false } });
+    flash("Rest day logged.");
+  }
+
+  function setDayMode(mode) {
+    const next = { ...(dailyLog.healthFlags || {}), normalDay: false, restDay: false, lowEnergy: false, sick: false };
+    next[mode] = true;
+    updateDailyLog({ healthFlags: next, activities: mode === "restDay" ? [] : dailyLog.activities });
+    flash(mode === "normalDay" ? "Normal day set." : `${mode === "restDay" ? "Rest" : mode === "lowEnergy" ? "Low energy" : "Sick"} day set.`);
+  }
+
+  function toggleHealthFlag(key) {
+    updateDailyLog({ healthFlags: { ...(dailyLog.healthFlags || {}), [key]: !dailyLog.healthFlags?.[key] } });
+  }
+
+  function toggleMedication(name) {
+    const current = new Set(dailyLog.medsTaken || []);
+    if (current.has(name)) current.delete(name);
+    else current.add(name);
+    updateDailyLog({ medsTaken: [...current] });
   }
 
   function openLogFood(food) {
@@ -950,6 +1103,7 @@ export default function AppV2() {
       ...nutrition,
     };
     const shouldRemember = !["Saved recipe", "Package calculator"].includes(food.source || "");
+    const nextCalories = totals.calories + number(entry.calories);
     setData((current) => ({
       ...current,
       diary: { ...current.diary, [date]: [...(current.diary[date] || []), entry] },
@@ -963,10 +1117,8 @@ export default function AppV2() {
     flash(`${food.name} added to ${meal.toLowerCase()}.`);
     // Celebrate when hitting calorie goal
     try {
-      const all = [...(current.diary[date] || [])];
-      const eaten = all.reduce((s, e) => s + number(e.calories), 0) + number(logForm.calories || 0);
       const goal = number(data.profile.calorieTarget);
-      if (goal > 0 && eaten >= goal * 0.98 && eaten <= goal * 1.05 && window.confetti) {
+      if (goal > 0 && nextCalories >= goal * 0.98 && nextCalories <= goal * 1.05 && window.confetti) {
         window.confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 }, colors: ["#FF4500","#FF7A00","#00E5FF","#A78BFA"] });
       }
     } catch {}
@@ -1017,8 +1169,12 @@ export default function AppV2() {
       const saved = searchSavedFoods(data.customFoods, searchTerm);
       const cached = await searchFoodCache(searchTerm);
       const starter = searchStarterFoods(searchTerm);
-      const localMatches = mergeFoods(saved, cached, starter);
-      if (localMatches.length) setResults(localMatches);
+      const localMatches = simplifyFoods(mergeFoods(saved, cached, starter));
+      if (localMatches.length) {
+        setResults(localMatches);
+        setNotice("");
+        return;
+      }
       // Open Food Facts is free — no API key needed
       let openFoodFacts = [];
       try {
@@ -1028,7 +1184,7 @@ export default function AppV2() {
         if (!localMatches.length) throw error;
       }
       // USDA only called via dedicated button to preserve API quota
-      const foods = mergeFoods(localMatches, openFoodFacts);
+      const foods = simplifyFoods(mergeFoods(openFoodFacts));
       setResults(foods);
       if (!foods.length) throw new Error("No foods found. Try the USDA Search button or enter manually.");
     });
@@ -1088,7 +1244,7 @@ export default function AppV2() {
     setResults([]);
     runRequest("Searching USDA FoodData Central...", async () => {
       const foods = await searchUsdaFoods(query.trim());
-      setResults(foods);
+      setResults(simplifyFoods(foods));
       if (!foods.length) throw new Error("No USDA foods with calorie data were found.");
     });
   }
@@ -1439,26 +1595,18 @@ export default function AppV2() {
   const projectedWeeks = remainingWeight > 0 && weeklyWeightChange < -0.05 ? remainingWeight / Math.abs(weeklyWeightChange) : null;
   const estimatedGoalDate = projectedWeeks ? new Date(Date.now() + projectedWeeks * 604800000).toLocaleDateString() : null;
 
-  if (locked) return <LockScreen mode="unlock" onUnlock={unlock} owner={security?.owner} />;
+  if (locked) return <LockScreen mode={security ? "unlock" : "setup"} onUnlock={unlock} onSetup={setupPin} owner={security?.owner} />;
 
   return (
     <div className="app-shell">
       <header className="topbar">
         <div>
           <span className="brand-mark">PULSE</span>
-          <h1>{tab === "diary" ? (() => { const h = new Date().getHours(); const g = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; const n = data.profile.name ? `, ${data.profile.name.split(" ")[0]}` : ""; return `${g}${n}.`; })() : ["add", "tools"].includes(tab) ? "Log with confidence." : tab === "coach" ? "Pantry & recipes." : tab === "progress" ? "Progress over time." : "Your profile."}</h1>
+          {tab === "diary" && <p className="top-message">{todayMessage}</p>}
         </div>
-        <input
-          className="date-picker"
-          aria-label="Diary date"
-          type="date"
-          value={date}
-          onChange={(event) => handleDateChange(event.target.value)}
-          onInput={(event) => handleDateChange(event.currentTarget.value)}
-        />
       </header>
 
-      <section className="calorie-card">
+      {tab === "diary" && <section className="calorie-card">
         {/* EKG heartbeat line */}
         <div className="ekg-wrap" aria-hidden="true">
           {/* 1200-unit SVG, 4 QRS beats (2 per 600-unit half) → at 7s animation = ~1 beat every 3.5s */}
@@ -1468,25 +1616,66 @@ export default function AppV2() {
           </svg>
         </div>
         <div className="calorie-copy">
-          <span className="eyebrow">{date === localDate() ? "Today's energy" : date}</span>
+          <span className="eyebrow">Food budget</span>
           <strong className={caloriePercent >= 100 ? "cal-over" : ""}>{displayCalories}</strong>
-          <small>{remaining >= 0 ? "calories remaining" : "calories over target"}</small>
-          <div className="calorie-equation"><span>{Math.round(totals.calories)} eaten</span><i /><span>{number(data.profile.calorieTarget)} goal</span></div>
+          <small>{remaining >= 0 ? "food calories left" : "over food target"}</small>
+          <div className="calorie-equation"><span>{Math.round(totals.calories)} food</span><i /><span>{number(data.profile.calorieTarget)} plan</span>{activityCalories > 0 && <><i /><span>{activityCalories} burn</span></>}</div>
         </div>
-        <div className="ring" style={{ "--progress": `${caloriePercent * 3.6}deg` }}>
+        <div className="ring" style={{ "--progress": `${caloriePercent * 3.6}deg`, "--activity-progress": `${Math.min(100, activityCalories / Math.max(1, number(data.profile.calorieTarget)) * 100) * 3.6}deg` }}>
           <div>
             <strong>{Math.round(caloriePercent)}%</strong>
             <span>used</span>
+            {activityCalories > 0 && <em>{activityCalories} burn</em>}
           </div>
         </div>
-      </section>
+      </section>}
 
-      <section className="macro-grid">
+      {tab === "diary" && (
+        <section className="top-vitals">
+          <div className="vitals-left">
+            <div className="hydration-glass-card">
+              <button className="glass-button" onClick={() => addWater(250)} aria-label="Add water 250ml">
+                <span className="glass" style={{ "--fill": `${hydrationPercent}%` }}>
+                  <MiniIcon type="water" />
+                </span>
+                <div>
+                  <small className="vitals-label">Water</small>
+                  <span>{Math.round(dailyLog.water || 0)} ml</span>
+                </div>
+              </button>
+            </div>
+            <div className="coffee-card" data-count={coffeeCount}>
+              <button className="glass-button" onClick={() => coffeeFood && openLogFood(coffeeFood)} aria-label="Log coffee">
+                <span className="glass glass-coffee" style={{ "--fill": `${Math.min(100, coffeeCount * 25)}%` }}>
+                  <MiniIcon type="coffee" />
+                </span>
+                <div>
+                  <small className="vitals-label">Coffee</small>
+                  <span>{coffeeCount} today</span>
+                </div>
+              </button>
+            </div>
+          </div>
+          <div className="top-activity-icons">
+            {ACTIVITY_PRESETS.map((item) => {
+              const minutes = activityMinutesByType[item.type] || 0;
+              return (
+                <button className="top-activity-button" aria-label={`Add ${item.label}`} key={item.type} onClick={() => openActivity(item.type, item.minutes)}>
+                  <MiniIcon type={item.label === "Swim" ? "swim" : item.label === "Weights" ? "weights" : "walk"} />
+                  <span>{minutes ? `${minutes}m` : item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {tab === "diary" && <section className="macro-grid">
         <Macro label="Protein" value={totals.protein} target={data.profile.proteinTarget} tone="protein" />
         <Macro label="Carbs" value={totals.carbs} target={data.profile.carbsTarget} tone="carbs" />
         <Macro label="Fat" value={totals.fat} target={data.profile.fatTarget} tone="fat" />
         <Macro label="Fiber" value={totals.fiber} target={data.profile.fiberTarget} tone="fiber" />
-      </section>
+      </section>}
 
       {notice && <div className="notice" role="status">{notice}</div>}
       <main ref={mainRef}>
@@ -1510,34 +1699,96 @@ export default function AppV2() {
               </div>
             )}
 
-            <div className="dashboard-grid">
+            <div className="dashboard-grid dashboard-grid-primary">
               <div className="insight-card calorie-history">
                 <div className="insight-heading"><div><span className="eyebrow">Last 7 days</span><h3>Calorie rhythm</h3></div><strong>{Math.round(totals.calories)}<small> kcal today</small></strong></div>
                 <CalorieChart diary={data.diary} target={data.profile.calorieTarget} />
               </div>
-              <div className="insight-card weight-history">
-                <div className="insight-heading"><div><span className="eyebrow violet">Measurements</span><h3>Weight trend</h3></div><strong>{latestMeasurement?.weight || "--"}<small>{latestMeasurement?.weight ? " kg" : ""}</small></strong></div>
-                <WeightTrend measurements={data.measurements} />
+            </div>
+
+            <div className="quick-hub">
+              <div className="quick-card quick-food-card">
+                <div className="quick-card-head">
+                  <div><span className="eyebrow">Quick food</span><h2>Add what you ate</h2></div>
+                  <button className="secondary compact" onClick={() => setTab("add")}>More</button>
+                </div>
+                <div className="quick-search">
+                  <input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    onKeyDown={(event) => { if (event.key === "Enter" && !busy && !hasLocalResults) searchOpenFoodFacts(); }}
+                    placeholder="banana, hard boiled egg, chicken..."
+                  />
+                  {!hasLocalResults && <button className="primary" disabled={busy || !query.trim()} onClick={searchOpenFoodFacts}>Find</button>}
+                </div>
+                <div className="quick-foods">
+                  {quickFoodSuggestions.map((food) => (
+                    <button className="quick-chip" key={food.id} onClick={() => openLogFood(food)}>
+                      <strong>{cleanFoodName(food.name)}</strong>
+                      <span>{Math.round(scaleNutrition(food.per100, food.servingGrams).calories)} kcal</span>
+                    </button>
+                  ))}
+                  {query.trim() && !hasLocalResults && !results.length && !busy && (
+                    <button className="quick-chip" style={{ opacity: 0.5 }} onClick={searchOpenFoodFacts}>
+                      <strong>Search online</strong>
+                      <span>Not in local database</span>
+                    </button>
+                  )}
+                </div>
+                {!!results.length && !hasLocalResults && (
+                  <div className="quick-results">
+                    {results.slice(0, 4).map((food) => (
+                      <article className="quick-result-row" key={`${food.source}-${food.id}`}>
+                        <button onClick={() => openLogFood(food)}>
+                          <strong>{cleanFoodName(food.name)}</strong>
+                          <span>{food.brand || food.source} · {Math.round(scaleNutrition(food.per100, food.servingGrams).calories)} kcal typical</span>
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="quick-card health-card">
+                <div className="quick-card-head">
+                  <div><span className="eyebrow">Health check</span><h2>Meds & how you feel</h2></div>
+                  <button className="secondary compact" onClick={() => setTab("settings")}>Edit meds</button>
+                </div>
+                {medicationList.length ? (
+                  <div className="check-row">
+                    {medicationList.map((med) => (
+                      <button className={dailyLog.medsTaken?.includes(med) ? "check-pill active" : "check-pill"} key={med} onClick={() => toggleMedication(med)}>
+                        {dailyLog.medsTaken?.includes(med) ? "Done" : "Take"} {med}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="helper">Add medications in Profile once, then they become a daily checklist here.</p>
+                )}
+                <div className="day-mode-row">
+                  {HEALTH_FLAGS.map(([key, label]) => (
+                    <button className={dailyLog.healthFlags?.[key] ? "check-pill active" : "check-pill"} key={key} onClick={() => setDayMode(key)}>{label}</button>
+                  ))}
+                </div>
+                <textarea value={dailyLog.notes} onChange={(event) => updateDailyLog({ notes: event.target.value.slice(0, 2000) })} placeholder="Anything worth remembering today? hunger, sleep, pain, mood..." />
               </div>
             </div>
 
-            <div className="daily-wellness">
-              <div className="section-heading"><div><span className="eyebrow violet">Daily tracking</span><h2>Water, activity & notes</h2></div></div>
-              <div className="form-grid">
-                <Field label="Water consumed" suffix="ml" type="number" min="0" value={dailyLog.water} onChange={(event) => updateDailyLog({ water: number(event.target.value) })} />
-                <label className="field"><span>Add activity</span><select onChange={(event) => {
-                  if (!event.target.value) return;
-                  updateDailyLog({ activities: [...dailyLog.activities, { id: makeId(), type: event.target.value, minutes: 30 }] });
-                  event.target.value = "";
-                }} defaultValue=""><option value="">Choose activity</option><option>Swimming</option><option>Walking</option><option>Strength training</option><option>Other</option></select></label>
+            <div className="today-log-card">
+              <div>
+                <span className="eyebrow crimson">Today logged</span>
+                <h2>{items.length ? `${items.length} food ${items.length === 1 ? "entry" : "entries"}` : "Nothing logged yet"}</h2>
+                <p>{Math.round(totals.calories)} kcal food · {waterOz || 0} oz water · {activityMinutes || 0} min activity</p>
               </div>
-              <div className="activity-list">{dailyLog.activities.map((activity) => <div className="activity-row" key={activity.id}><strong>{activity.type}</strong><input aria-label={`${activity.type} minutes`} type="number" value={activity.minutes} onChange={(event) => updateDailyLog({ activities: dailyLog.activities.map((item) => item.id === activity.id ? { ...item, minutes: number(event.target.value) } : item) })} /><span>min</span><span className="burn-badge">~{calcBurnedCalories(activity.type, number(activity.minutes), number(data.profile.weight))} kcal burned</span><button className="text-button danger-text" onClick={() => updateDailyLog({ activities: dailyLog.activities.filter((item) => item.id !== activity.id) })}>Remove</button></div>)}</div>
-              <label className="field"><span>Daily notes</span><textarea value={dailyLog.notes} onChange={(event) => updateDailyLog({ notes: event.target.value.slice(0, 2000) })} placeholder="Energy, hunger, training, sleep, or anything worth remembering..." /></label>
+              <button className="secondary compact" onClick={() => setTab("log")}>Open log</button>
             </div>
 
-            {!!coach.length && <div className="coach-card"><span className="eyebrow">Personal coach</span><h2>Based on today's log</h2>{coach.map((item) => <div className="coach-item" key={item.title}><strong>{item.title}</strong><p>{item.body}</p></div>)}</div>}
+            {!!coach.length && <details className="coach-card coach-pop">
+              <summary><span className="eyebrow">Coach</span><strong>{coach[0].title}</strong><small>Tap for review</small></summary>
+              {coach.map((item) => <div className="coach-item" key={item.title}><strong>{item.title}</strong><p>{item.body}</p></div>)}
+            </details>}
 
-            <div className="ai-review-section">
+            <div className="ai-review-section today-ai-hidden">
               <div className="section-heading">
                 <div><span className="eyebrow violet">AI-powered</span><h2>Ask AI to review today</h2></div>
                 <button className="secondary compact" disabled={busy} onClick={getDailyAiReview}>
@@ -1556,13 +1807,34 @@ export default function AppV2() {
               {!aiDailyReview && <p className="helper">AI will read your diary for today and suggest what to eat next to hit your targets.</p>}
             </div>
 
+          </section>
+        )}
+
+        {tab === "log" && (
+          <section className="panel stack log-panel">
             <div className="section-heading">
               <div>
                 <span className="eyebrow crimson">{date === localDate() ? "Today" : date}</span>
-                <h2>Food diary</h2>
+                <h2>Daily log</h2>
               </div>
               <button className="primary compact" onClick={() => setTab("add")}>Add food</button>
             </div>
+            <div className="log-summary-grid">
+              <div><span>Food</span><strong>{Math.round(totals.calories)} kcal</strong></div>
+              <div><span>Water</span><strong>{waterOz || 0} oz</strong></div>
+              <div><span>Activity</span><strong>{activityMinutes || 0} min</strong></div>
+              <div><span>Deficit boost</span><strong>{activityCalories} kcal</strong></div>
+            </div>
+            <div className="log-day-card">
+              <strong>{dailyLog.healthFlags?.restDay ? "Rest day" : dailyLog.healthFlags?.lowEnergy ? "Low energy day" : dailyLog.healthFlags?.sick ? "Sick day" : "Normal day"}</strong>
+              <span>{dailyLog.notes || "No notes yet."}</span>
+            </div>
+            {medicationList.length > 0 && (
+              <div className="log-day-card">
+                <strong>Meds</strong>
+                <span>{dailyLog.medsTaken?.length ? dailyLog.medsTaken.join(", ") : "Nothing checked off yet."}</span>
+              </div>
+            )}
             {MEALS.map((meal) => {
               const mealItems = items.filter((item) => item.meal === meal);
               const mealTotal = totalsFor(mealItems);
@@ -1592,19 +1864,28 @@ export default function AppV2() {
         )}
 
         {tab === "add" && (
-          <section className="panel stack">
+          <section className="panel stack add-panel">
             <div className="section-heading">
-              <div><span className="eyebrow">Add food</span><h2>Search, choose, log</h2></div>
+              <div><span className="eyebrow">Quick add</span><h2>What did you eat?</h2></div>
+              <button className="secondary compact" onClick={() => setTab("tools")}>Scan / AI</button>
             </div>
             <div className="search-line">
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search a food or product" />
-              <button className="primary" disabled={busy} onClick={searchOpenFoodFacts}>Search foods</button>
+              <input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && !busy && searchOpenFoodFacts()} placeholder="banana, fried eggs, chicken..." />
+              <button className="primary" disabled={busy} onClick={searchOpenFoodFacts}>Find</button>
             </div>
             <div className="barcode-line">
               <input inputMode="numeric" value={barcode} onChange={(event) => setBarcode(event.target.value)} placeholder="Enter barcode digits" />
               <button className="secondary" disabled={busy} onClick={lookupBarcode}>Look up barcode</button>
             </div>
-            <p className="helper">Search checks your saved foods first, then common starter foods, then live nutrition sources when needed.</p>
+            <p className="helper">Simple foods show once. Tap Add, choose amount, done.</p>
+            <div className="quick-foods">
+              {quickFoodSuggestions.map((food) => (
+                <button className="quick-chip" key={food.id} onClick={() => openLogFood(food)}>
+                  <strong>{cleanFoodName(food.name)}</strong>
+                  <span>{Math.round(scaleNutrition(food.per100, food.servingGrams).calories)} kcal</span>
+                </button>
+              ))}
+            </div>
 
             <hr />
             <div className="section-heading">
@@ -1647,60 +1928,118 @@ export default function AppV2() {
               {results.map((food) => (
                 <article className="result-card" key={`${food.source}-${food.id}`}>
                   <div>
-                    <span className="source">{food.source}</span>
-                    <strong>{food.name}</strong>
-                    <small>{food.brand || "No brand"} - per 100g</small>
-                    <p>{Math.round(food.per100.calories)} kcal / P {round(food.per100.protein)} / C {round(food.per100.carbs)} / F {round(food.per100.fat)}</p>
+                    <span className="source">{food.brand || (food.source === "Local database" ? "Common food" : food.source)}</span>
+                    <strong>{cleanFoodName(food.name)}</strong>
+                    <small>{Math.round(scaleNutrition(food.per100, food.servingGrams).calories)} kcal typical serving</small>
+                    <p>P {round(scaleNutrition(food.per100, food.servingGrams).protein)} / C {round(scaleNutrition(food.per100, food.servingGrams).carbs)} / F {round(scaleNutrition(food.per100, food.servingGrams).fat)}</p>
                     <ConfidenceBadge value={food.confidence} />
                     {food.ingredients && <p className="ingredients"><strong>Ingredients:</strong> {food.ingredients}</p>}
                   </div>
-                  <button className="primary compact" onClick={() => openLogFood(food)}>Review & add</button>
+                  <button className="primary compact" onClick={() => openLogFood(food)}>Add</button>
                 </article>
               ))}
             </div>}
 
-            <hr />
-            <div className="section-heading">
-              <div><span className="eyebrow">Your own foods</span><h2>Custom food entry</h2></div>
-            </div>
-            <p className="helper">Enter nutrition values for one serving. Saving creates a reusable custom food, then opens the portion logger.</p>
-            <div className="form-grid">
-              <Field label="Food name" value={custom.name} onChange={(event) => updateCustom({ name: event.target.value })} />
-              <Field label="Brand (optional)" value={custom.brand} onChange={(event) => updateCustom({ brand: event.target.value })} />
-              <Field label="Serving size" suffix="g" type="number" min="0" value={custom.servingGrams} onChange={(event) => updateCustom({ servingGrams: event.target.value })} />
-              <Field label="Calories per serving" suffix="kcal" type="number" min="0" value={custom.calories} onChange={(event) => updateCustom({ calories: event.target.value })} />
-              <Field label="Protein per serving" suffix="g" type="number" min="0" value={custom.protein} onChange={(event) => updateCustom({ protein: event.target.value })} />
-              <Field label="Carbs per serving" suffix="g" type="number" min="0" value={custom.carbs} onChange={(event) => updateCustom({ carbs: event.target.value })} />
-              <Field label="Fat per serving" suffix="g" type="number" min="0" value={custom.fat} onChange={(event) => updateCustom({ fat: event.target.value })} />
-              <Field label="Fiber per serving" suffix="g" type="number" min="0" value={custom.fiber} onChange={(event) => updateCustom({ fiber: event.target.value })} />
-            </div>
-            <button className="primary" onClick={saveCustomFood}>Save reusable food</button>
+            <details className="manual-entry-drawer">
+              <summary>
+                <span>Can't find it?</span>
+                <strong>Manual food</strong>
+              </summary>
+              <p className="helper">Use this only when search cannot find the food. Add one serving, then save it for next time.</p>
+              <div className="form-grid">
+                <Field label="Food name" value={custom.name} onChange={(event) => updateCustom({ name: event.target.value })} />
+                <Field label="Brand (optional)" value={custom.brand} onChange={(event) => updateCustom({ brand: event.target.value })} />
+                <Field label="Serving size" suffix="g" type="number" min="0" value={custom.servingGrams} onChange={(event) => updateCustom({ servingGrams: event.target.value })} />
+                <Field label="Calories per serving" suffix="kcal" type="number" min="0" value={custom.calories} onChange={(event) => updateCustom({ calories: event.target.value })} />
+                <Field label="Protein per serving" suffix="g" type="number" min="0" value={custom.protein} onChange={(event) => updateCustom({ protein: event.target.value })} />
+                <Field label="Carbs per serving" suffix="g" type="number" min="0" value={custom.carbs} onChange={(event) => updateCustom({ carbs: event.target.value })} />
+                <Field label="Fat per serving" suffix="g" type="number" min="0" value={custom.fat} onChange={(event) => updateCustom({ fat: event.target.value })} />
+                <Field label="Fiber per serving" suffix="g" type="number" min="0" value={custom.fiber} onChange={(event) => updateCustom({ fiber: event.target.value })} />
+              </div>
+              <button className="primary" onClick={saveCustomFood}>Save food</button>
+            </details>
 
             {!!data.customFoods.length && (
-              <div className="saved-foods">
-                <h3>Saved custom foods</h3>
-                {data.customFoods.map((food) => (
-                  <article className="food-row" key={food.id}>
-                    <div><strong>{food.name}</strong><span>{food.brand || "Custom food"} - {food.servingGrams}g serving</span></div>
-                    <b>{Math.round(scaleNutrition(food.per100, food.servingGrams).calories)} kcal</b>
-                    <div className="row-actions">
-                      <button className="text-button" onClick={() => openLogFood(food)}>Add</button>
-                      <button className="text-button danger-text" onClick={() => deleteCustomFood(food.id)}>Delete</button>
-                    </div>
-                  </article>
-                ))}
-              </div>
+              <details className="manual-entry-drawer saved-foods-drawer">
+                <summary>
+                  <span>Reusable</span>
+                  <strong>Saved foods</strong>
+                </summary>
+                <div className="saved-foods">
+                  {data.customFoods.map((food) => (
+                    <article className="food-row" key={food.id}>
+                      <div><strong>{food.name}</strong><span>{food.brand || "Custom food"} - {food.servingGrams}g serving</span></div>
+                      <b>{Math.round(scaleNutrition(food.per100, food.servingGrams).calories)} kcal</b>
+                      <div className="row-actions">
+                        <button className="text-button" onClick={() => openLogFood(food)}>Add</button>
+                        <button className="text-button danger-text" onClick={() => deleteCustomFood(food.id)}>Delete</button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </details>
             )}
           </section>
         )}
 
         {tab === "tools" && (
-          <section className="panel stack">
-            <div className="tool-card ocr-card">
+          <section className="panel stack tools-panel">
+            <div className="tool-card scan-card">
               <div className="section-heading">
-                <div><span className="eyebrow violet">Runs in your browser</span><h2>Nutrition label OCR</h2></div>
-                <span className="feature-badge">Local</span>
+                <div><span className="eyebrow">Scan & estimate</span><h2>When it is not a simple food</h2></div>
               </div>
+              <p className="helper">Use these for packaged food, restaurant meals, nutrition labels, or unclear portions. Simple foods belong in Add.</p>
+              <div className="barcode-line">
+                <input inputMode="numeric" value={barcode} onChange={(event) => setBarcode(event.target.value)} placeholder="Enter barcode digits" />
+                <button className="primary" disabled={busy} onClick={lookupBarcode}>Look up barcode</button>
+              </div>
+              {!!results.length && <div className="result-list">
+                {results.slice(0, 6).map((food) => (
+                  <article className="result-card" key={`${food.source}-${food.id}`}>
+                    <div>
+                      <span className="source">{food.brand || food.source}</span>
+                      <strong>{cleanFoodName(food.name)}</strong>
+                      <small>{Math.round(scaleNutrition(food.per100, food.servingGrams).calories)} kcal typical serving</small>
+                    </div>
+                    <button className="primary compact" onClick={() => openLogFood(food)}>Review</button>
+                  </article>
+                ))}
+              </div>}
+            </div>
+
+            <details className="tool-card ai-review-section tool-drawer">
+              <summary>
+                <div><span className="eyebrow violet">Optional</span><strong>AI estimate or day review</strong></div>
+                <button className="secondary compact" disabled={busy} onClick={getDailyAiReview}>{busy ? "Reviewing..." : "Review today"}</button>
+              </summary>
+              <div className="search-line">
+                <input
+                  value={mealDescription}
+                  onChange={(event) => setMealDescription(event.target.value)}
+                  onKeyDown={(event) => event.key === "Enter" && !busy && describeMealToAi()}
+                  placeholder="e.g. nasi lemak with egg and sambal"
+                />
+                <button className="primary" disabled={busy} onClick={describeMealToAi}>Estimate</button>
+              </div>
+              <div className="scanner-actions">
+                <label className="secondary file-button">
+                  Take food photo
+                  <input type="file" accept="image/*" capture="environment" disabled={busy} onChange={(event) => analyzeFoodPhoto(event.target.files?.[0])} />
+                </label>
+                <label className="secondary file-button">
+                  Choose photo
+                  <input type="file" accept="image/*" disabled={busy} onChange={(event) => analyzeFoodPhoto(event.target.files?.[0])} />
+                </label>
+              </div>
+              {aiPhotoResult && <details className="ai-result" open><summary><strong>AI meal estimate</strong></summary><p>{aiPhotoResult}</p></details>}
+              {aiDailyReview && <div className="ai-result"><div className="ai-result-header"><strong>AI daily review</strong><button className="text-button" onClick={() => setAiDailyReview("")}>Dismiss</button></div><p style={{ whiteSpace: "pre-wrap" }}>{aiDailyReview}</p></div>}
+            </details>
+
+            <details className="tool-card ocr-card tool-drawer">
+              <summary>
+                <div><span className="eyebrow violet">Optional</span><strong>Nutrition label OCR</strong></div>
+                <span className="feature-badge">Local</span>
+              </summary>
               <p className="helper">Take a clear, straight-on nutrition label photo or choose one from your gallery. Tesseract.js reads it locally; verify every extracted value before saving.</p>
               <div className="scanner-actions">
                 <label className="primary file-button">
@@ -1725,12 +2064,12 @@ export default function AppV2() {
                   <details open><summary>Extracted OCR text</summary><pre>{ocrText}</pre></details>
                 </>
               )}
-            </div>
+            </details>
 
-            <div className="tool-card package-card">
-            <div className="section-heading">
-              <div><span className="eyebrow crimson">Partial package or serving</span><h2>Package calculator</h2></div>
-            </div>
+            <details className="tool-card package-card tool-drawer">
+            <summary>
+              <div><span className="eyebrow crimson">Optional</span><strong>Packaged food amount</strong></div>
+            </summary>
             <p className="helper">Enter label values per serving, then the package size and amount you actually ate.</p>
             <div className="form-grid">
               <Field label="Food/package name" value={packageForm.name} onChange={(event) => updatePackage({ name: event.target.value })} />
@@ -1752,7 +2091,7 @@ export default function AppV2() {
               <div><span>Eaten fiber</span><strong>{packageTotals.fiber}g</strong></div>
             </div>
             <button className="primary" onClick={logPackageAmount}>Add calculated amount to diary</button>
-            </div>
+            </details>
 
           </section>
         )}
@@ -1767,23 +2106,34 @@ export default function AppV2() {
               <div className="coach-item"><strong>Pantry ideas</strong><p>{data.pantry.length ? data.pantry.slice(0, 4).map((item) => item.name).join(", ") : "Save pantry ingredients from search, barcode, USDA, or manual entries to get useful suggestions."}</p></div>
             </div>
 
-            <div className="tool-card">
+            <div className="tool-card pantry-card">
               <div className="section-heading"><div><span className="eyebrow crimson">What's in your kitchen</span><h2>Pantry</h2></div></div>
               <p className="helper">Just type what you have — nutrition is optional. You can fill it in later.</p>
               <div className="form-grid">
                 <Field label="Ingredient name" value={pantryDraft.name} onChange={(event) => setPantryDraft({ ...pantryDraft, name: event.target.value })} />
                 <Field label="Default serving" suffix="g" type="number" min="1" value={pantryDraft.grams} onChange={(event) => setPantryDraft({ ...pantryDraft, grams: event.target.value })} />
+              </div>
+              <details className="manual-entry-drawer pantry-nutrition-drawer">
+                <summary>
+                  <span>Optional</span>
+                  <strong>Add nutrition</strong>
+                </summary>
+                <div className="form-grid">
                 <Field label="Calories (optional)" suffix="kcal" type="number" min="0" value={pantryDraft.calories} onChange={(event) => setPantryDraft({ ...pantryDraft, calories: event.target.value })} />
                 <Field label="Protein (optional)" suffix="g" type="number" min="0" value={pantryDraft.protein} onChange={(event) => setPantryDraft({ ...pantryDraft, protein: event.target.value })} />
                 <Field label="Carbs (optional)" suffix="g" type="number" min="0" value={pantryDraft.carbs} onChange={(event) => setPantryDraft({ ...pantryDraft, carbs: event.target.value })} />
                 <Field label="Fat (optional)" suffix="g" type="number" min="0" value={pantryDraft.fat} onChange={(event) => setPantryDraft({ ...pantryDraft, fat: event.target.value })} />
-              </div>
+                </div>
+              </details>
               <button className="primary" onClick={saveManualPantry}>{editingPantryId ? "Update ingredient" : "Add to pantry"}</button>
               <div className="pantry-list">{data.pantry.map((item) => <article className="food-row" key={item.id}><div><strong>{item.name}</strong><span>{item.source} - {item.defaultGrams}g default</span><ConfidenceBadge value={item.confidence} /></div><b>{scaleNutrition(item.per100, item.defaultGrams).calories} kcal</b><div className="row-actions"><button className="text-button" onClick={() => editPantry(item)}>Edit</button><button className="text-button danger-text" onClick={() => deletePantry(item.id)}>Delete</button></div></article>)}</div>
             </div>
 
-            <div className="tool-card">
-              <div className="section-heading"><div><span className="eyebrow violet">Database calculated</span><h2>Recipe builder</h2></div></div>
+            <details className="tool-card recipe-builder-card">
+              <summary>
+                <span>Optional</span>
+                <strong>Recipe builder</strong>
+              </summary>
               <div className="form-grid">
                 <Field label="Recipe title" value={recipeDraft.title} onChange={(event) => setRecipeDraft({ ...recipeDraft, title: event.target.value })} />
                 <label className="field"><span>Meal type</span><select value={recipeDraft.type} onChange={(event) => setRecipeDraft({ ...recipeDraft, type: event.target.value })}>{["breakfast", "lunch", "dinner", "snack", "smoothie", "salad"].map((type) => <option key={type}>{type}</option>)}</select></label>
@@ -1795,7 +2145,7 @@ export default function AppV2() {
               <div className="calculation"><div><span>Calories</span><strong>{recipeTotals.calories} kcal</strong></div><div><span>Protein</span><strong>{recipeTotals.protein}g</strong></div><div><span>Carbs / Fat / Fiber</span><strong>{recipeTotals.carbs}g / {recipeTotals.fat}g / {recipeTotals.fiber}g</strong></div><div><span>Confidence</span><strong>{recipeDraft.items.every((item) => ["off", "usda"].includes(item.confidence)) ? "Database ingredients" : "Mixed sources"}</strong></div></div>
               <button className="primary" onClick={saveRecipe}>Save recipe</button>
               <div className="recipe-list">{data.recipes.map((recipe) => <article className="result-card" key={recipe.id}><div><span className="source">{recipe.type}</span><strong>{recipe.title}</strong><p>{recipe.totals.calories} kcal / P {recipe.totals.protein} / C {recipe.totals.carbs} / F {recipe.totals.fat} / Fiber {recipe.totals.fiber}</p><ConfidenceBadge value={recipe.confidence} /><p>{recipe.reason}</p></div><button className="secondary compact" onClick={() => logRecipe(recipe)}>Log recipe</button></article>)}</div>
-            </div>
+            </details>
 
           </section>
         )}
@@ -1847,6 +2197,14 @@ export default function AppV2() {
         {tab === "settings" && (
           <section className="panel stack">
             <div className="section-heading"><div><span className="eyebrow">Your profile</span><h2>Settings</h2></div></div>
+            <div className="today-log-card profile-shortcut-card">
+              <div>
+                <span className="eyebrow violet">Home food ideas</span>
+                <h2>Pantry & recipes</h2>
+                <p>Keep a simple list of what you have at home, then use it when you want meal ideas.</p>
+              </div>
+              <button className="secondary compact" onClick={() => setTab("coach")}>Open</button>
+            </div>
 
             <div className="tool-card profile-card">
               <div className="section-heading"><div><span className="eyebrow crimson">Step 1 — About you</span><h2>Personal profile</h2></div></div>
@@ -1860,7 +2218,8 @@ export default function AppV2() {
                 <Field label="Highest ever weight" suffix="kg" type="number" min="30" step="0.1" value={data.profile.highestWeight || ""} onChange={(event) => setProfile({ highestWeight: event.target.value })} />
                 <Field label="Goal weight" suffix="kg" type="number" min="30" step="0.1" value={data.profile.goalWeight || ""} onChange={(event) => setProfile({ goalWeight: event.target.value })} />
                 <label className="field"><span>Activity level</span><select value={data.profile.activityLevel || "sedentary"} onChange={(event) => setProfile({ activityLevel: event.target.value })}><option value="sedentary">Sedentary (desk job, little exercise)</option><option value="light">Light active (1-3 workouts/week)</option><option value="moderate">Moderately active (3-5 workouts/week)</option><option value="active">Very active (6-7 workouts/week)</option><option value="very_active">Extra active (physical job + training)</option></select></label>
-                <label className="field" style={{gridColumn:"1/-1"}}><span>Medical conditions (optional — helps AI give better advice)</span><textarea value={data.profile.medicalConditions || ""} onChange={(event) => setProfile({ medicalConditions: event.target.value })} placeholder="e.g. Type 2 diabetes, hypertension, high cholesterol, PCOS, thyroid condition…" /></label>
+                <label className="field" style={{gridColumn:"1/-1"}}><span>Medical conditions / health notes</span><textarea value={data.profile.medicalConditions || ""} onChange={(event) => setProfile({ medicalConditions: event.target.value })} placeholder="e.g. Type 2 diabetes, hypertension, high cholesterol, PCOS, thyroid condition..." /></label>
+                <label className="field" style={{gridColumn:"1/-1"}}><span>Medications / supplements checklist</span><textarea value={data.profile.medications || ""} onChange={(event) => setProfile({ medications: event.target.value })} placeholder="One per line, e.g. Metformin, Vitamin D, Fish oil..." /></label>
               </div>
               {calcBMR(data.profile) > 0 && (
                 <div className="calculation bmr-result">
@@ -1956,9 +2315,9 @@ export default function AppV2() {
         {[
           ["diary", "Today", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="8" cy="15" r="1" fill="currentColor"/><circle cx="12" cy="15" r="1" fill="currentColor"/></svg>],
           ["add", "Add", <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>],
-          ["tools", "Tools", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>],
-          ["coach", "Pantry", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/><path d="M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2"/><rect x="5" y="6" width="14" height="14" rx="1"/></svg>],
-          ["progress", "Stats", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>],
+          ["tools", "Scan", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>],
+          ["log", "Log", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg>],
+          ["progress", "Progress", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>],
           ["settings", "Profile", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>],
         ].map(([key, label, icon]) => (
           <button key={key} className={tab === key ? "active" : ""} onClick={() => setTab(key)}>
@@ -1971,9 +2330,14 @@ export default function AppV2() {
       {selectedFood && (
         <div className="modal-backdrop" onClick={() => setSelectedFood(null)}>
           <section className="modal" role="dialog" aria-modal="true" aria-labelledby="log-food-title" onClick={(event) => event.stopPropagation()}>
-            <span className="eyebrow">{selectedFood.source}</span>
-            <h2 id="log-food-title">{selectedFood.name}</h2>
-            <p className="helper">{selectedFood.brand || "No brand"} - nutrition scales from the source's per-100g values.</p>
+            <span className="eyebrow">Add to today</span>
+            <h2 id="log-food-title">{cleanFoodName(selectedFood.name)}</h2>
+            <p className="helper">{selectedFood.brand || (selectedFood.source === "Local database" ? "Common food" : selectedFood.source)} · adjust the amount if needed.</p>
+            <div className="portion-actions">
+              <button className="secondary" onClick={() => setLogForm((current) => ({ ...current, grams: round((selectedFood.servingGrams || 100) / 2) }))}>Half</button>
+              <button className="secondary" onClick={() => setLogForm((current) => ({ ...current, grams: selectedFood.servingGrams || 100 }))}>Typical</button>
+              <button className="secondary" onClick={() => setLogForm((current) => ({ ...current, grams: round((selectedFood.servingGrams || 100) * 2) }))}>Double</button>
+            </div>
             <div className="form-grid">
               <Field label="Amount eaten" suffix="g" type="number" min="0" value={logForm.grams} onChange={(event) => setLogForm((current) => ({ ...current, grams: event.target.value }))} />
               <label className="field"><span>Meal</span><select value={logForm.meal} onChange={(event) => setLogForm((current) => ({ ...current, meal: event.target.value }))}>{MEALS.map((meal) => <option key={meal}>{meal}</option>)}</select></label>
@@ -1984,7 +2348,29 @@ export default function AppV2() {
             </div>
             <div className="modal-actions">
               <button className="secondary" onClick={() => setSelectedFood(null)}>Cancel</button>
-              <button className="primary" onClick={confirmSelectedFood}>Add to diary</button>
+              <button className="primary" onClick={confirmSelectedFood}>Add to today</button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {activityDraft && (
+        <div className="modal-backdrop" onClick={() => setActivityDraft(null)}>
+          <section className="modal compact-modal" role="dialog" aria-modal="true" aria-labelledby="activity-title" onClick={(event) => event.stopPropagation()}>
+            <span className="eyebrow">Activity time</span>
+            <h2 id="activity-title">{activityDraft.type}</h2>
+            <div className="portion-actions">
+              {[15, 30, 45, 60].map((minutes) => (
+                <button className="secondary" key={minutes} onClick={() => setActivityDraft((current) => ({ ...current, minutes }))}>{minutes}m</button>
+              ))}
+            </div>
+            <Field label="Duration" suffix="min" type="number" min="1" value={activityDraft.minutes} onChange={(event) => setActivityDraft((current) => ({ ...current, minutes: event.target.value }))} />
+            <div className="calculation">
+              <div><span>Burn</span><strong>~{calcBurnedCalories(activityDraft.type, number(activityDraft.minutes), number(data.profile.weight))} kcal</strong></div>
+            </div>
+            <div className="modal-actions">
+              <button className="secondary" onClick={() => setActivityDraft(null)}>Cancel</button>
+              <button className="primary" onClick={confirmActivity}>Save</button>
             </div>
           </section>
         </div>

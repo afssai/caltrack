@@ -1,12 +1,12 @@
-# CalTrack Project Brief
+# PULSE Project Brief
 
 ## Purpose
 
-CalTrack V1 is a private-first personal weight-loss companion. Its mission is to help one person stay motivated, consistent, accountable, and aware of progress during weight loss without turning the process into shame, noise, or surveillance.
+PULSE V1 is a private-first personal weight-loss companion. Its mission is to help one person stay motivated, consistent, accountable, and aware of progress during weight loss without turning the process into shame, noise, or surveillance.
 
 The app should support the emotional side of weight loss as much as the tracking side: helping the user see effort, recover from imperfect days, notice trends, and keep going. Food logging, calorie tracking, exercise tracking, reminders, progress photos, and cloud sync are supporting tools for that larger goal.
 
-CalTrack should remain useful locally even when cloud services are unavailable.
+PULSE should remain useful locally even when cloud services are unavailable.
 
 ## Current Product Scope
 

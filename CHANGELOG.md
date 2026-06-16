@@ -6,7 +6,7 @@
 
 - Added Supabase browser client through `@supabase/supabase-js`.
 - Added Supabase auth and local-first sync module.
-- Added Supabase schema migration for CalTrack tables, RLS policies, and progress photo storage.
+- Added Supabase schema migration for app tables, RLS policies, and progress photo storage.
 - Added follow-up migration granting table access to the authenticated role.
 - Added GitHub Pages build-time Supabase environment variables.
 - Updated CSP for Vercel and local preview to allow Supabase HTTPS/WSS connections.

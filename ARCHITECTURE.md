@@ -1,8 +1,8 @@
-# CalTrack Architecture
+# PULSE Architecture
 
 ## Application
 
-CalTrack is a React + Vite single-page app. The entry point is `src/main.jsx`, which renders `src/AppV2.jsx`.
+PULSE is a React + Vite single-page app. The entry point is `src/main.jsx`, which renders `src/AppV2.jsx`.
 
 The app keeps local-first state in browser `localStorage`:
 

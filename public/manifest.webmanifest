@@ -1,6 +1,6 @@
 {
-  "name": "CalTrack V2",
-  "short_name": "CalTrack",
+  "name": "PULSE",
+  "short_name": "PULSE",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#070608",
