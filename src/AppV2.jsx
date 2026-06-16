@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Droplets, Coffee, Footprints, Dumbbell, Flame, Plus, List, CalendarDays, ScanLine, User, Activity, Waves, Beef, Wheat, Leaf, Droplet, Trash2, Pencil, Timer, Zap } from "lucide-react";
+import { Droplets, Coffee, Footprints, Dumbbell, Flame, Plus, List, CalendarDays, ScanLine, User, Activity, Waves, Beef, Wheat, Leaf, Droplet, Trash2, Timer, Zap, Sun, Moon, BatteryLow, Thermometer, Brain, Camera, Package, BookOpen, Scale, Image, HeartPulse, Stethoscope } from "lucide-react";
 import { createWorker } from "tesseract.js";
 import {
   cacheFoodResult,
@@ -28,10 +28,10 @@ const ACTIVITY_PRESETS = [
   { type: "Strength training", label: "Weights", minutes: 45 },
 ];
 const HEALTH_FLAGS = [
-  ["normalDay", "Normal day"],
-  ["restDay", "Rest day"],
-  ["lowEnergy", "Low energy"],
-  ["sick", "Feeling sick"],
+  ["normalDay", "Normal", Sun],
+  ["restDay", "Rest", Moon],
+  ["lowEnergy", "Low energy", BatteryLow],
+  ["sick", "Sick", Thermometer],
 ];
 const QUICK_FOOD_IDS = ["starter:banana", "starter:egg", "starter:fried-eggs", "starter:chicken-breast", "starter:white-rice"];
 const EMPTY_NUTRITION = { calories: "", protein: "", carbs: "", fat: "", fiber: "" };
@@ -1809,7 +1809,7 @@ export default function AppV2() {
 
               <div className="quick-card health-card">
                 <div className="quick-card-head">
-                  <div><span className="eyebrow">Health check</span><h2>Meds & how you feel</h2></div>
+                  <div><span className="eyebrow"><Stethoscope size={11} style={{verticalAlign:"middle",marginRight:3}} />Health check</span><h2><HeartPulse size={18} style={{verticalAlign:"middle",marginRight:6,color:"var(--accent-danger)"}} />Meds & how you feel</h2></div>
                   <button className="secondary compact" onClick={() => setTab("settings")}>Edit meds</button>
                 </div>
                 {medicationList.length ? (
@@ -1824,8 +1824,10 @@ export default function AppV2() {
                   <p className="helper">Add medications in Profile once, then they become a daily checklist here.</p>
                 )}
                 <div className="day-mode-row">
-                  {HEALTH_FLAGS.map(([key, label]) => (
-                    <button className={dailyLog.healthFlags?.[key] ? "check-pill active" : "check-pill"} key={key} onClick={() => setDayMode(key)}>{label}</button>
+                  {HEALTH_FLAGS.map(([key, label, FlagIcon]) => (
+                    <button className={dailyLog.healthFlags?.[key] ? "check-pill active" : "check-pill"} key={key} onClick={() => setDayMode(key)}>
+                      <FlagIcon size={14} strokeWidth={1.8} />{label}
+                    </button>
                   ))}
                 </div>
                 <textarea value={dailyLog.notes} onChange={(event) => updateDailyLog({ notes: event.target.value.slice(0, 2000) })} placeholder="Anything worth remembering today? hunger, sleep, pain, mood..." />
@@ -1872,8 +1874,8 @@ export default function AppV2() {
           <section className="panel stack log-panel">
             <div className="section-heading">
               <div>
-                <span className="eyebrow crimson">{date === localDate() ? "Today" : date}</span>
-                <h2>Daily log</h2>
+                <span className="eyebrow crimson"><BookOpen size={11} style={{verticalAlign:"middle",marginRight:3}} />{date === localDate() ? "Today" : date}</span>
+                <h2><BookOpen size={18} style={{verticalAlign:"middle",marginRight:6,color:"var(--accent-warm)"}} />Daily log</h2>
               </div>
               <button className="primary compact" onClick={() => setTab("add")}>Add food</button>
             </div>
@@ -2089,7 +2091,7 @@ export default function AppV2() {
 
             <details className="tool-card ai-review-section tool-drawer">
               <summary>
-                <div><span className="eyebrow violet">Optional</span><strong>AI estimate or day review</strong></div>
+                <div><span className="eyebrow violet"><Brain size={11} style={{verticalAlign:"middle",marginRight:3}} />AI Tools</span><strong><Brain size={15} style={{verticalAlign:"middle",marginRight:5,color:"#a99cff"}} />AI estimate or day review</strong></div>
                 <button className="secondary compact" disabled={busy} onClick={getDailyAiReview}>{busy ? "Reviewing..." : "Review today"}</button>
               </summary>
               <div className="search-line">
@@ -2117,7 +2119,7 @@ export default function AppV2() {
 
             <details className="tool-card ocr-card tool-drawer">
               <summary>
-                <div><span className="eyebrow violet">Optional</span><strong>Nutrition label OCR</strong></div>
+                <div><span className="eyebrow violet"><Camera size={11} style={{verticalAlign:"middle",marginRight:3}} />Scanner</span><strong><Camera size={15} style={{verticalAlign:"middle",marginRight:5,color:"#4dc3ff"}} />Nutrition label OCR</strong></div>
                 <span className="feature-badge">Local</span>
               </summary>
               <p className="helper">Take a clear, straight-on nutrition label photo or choose one from your gallery. Tesseract.js reads it locally; verify every extracted value before saving.</p>
@@ -2148,7 +2150,7 @@ export default function AppV2() {
 
             <details className="tool-card package-card tool-drawer">
             <summary>
-              <div><span className="eyebrow crimson">Optional</span><strong>Packaged food amount</strong></div>
+              <div><span className="eyebrow crimson"><Package size={11} style={{verticalAlign:"middle",marginRight:3}} />Label calc</span><strong><Package size={15} style={{verticalAlign:"middle",marginRight:5,color:"var(--accent-warm)"}} />Packaged food amount</strong></div>
             </summary>
             <p className="helper">Enter label values per serving, then the package size and amount you actually ate.</p>
             <div className="form-grid">
@@ -2232,7 +2234,7 @@ export default function AppV2() {
 
         {tab === "progress" && (
           <section className="panel stack">
-            <div className="section-heading"><div><span className="eyebrow">By date</span><h2>Weight & waist</h2></div></div>
+            <div className="section-heading"><div><span className="eyebrow"><Scale size={11} style={{verticalAlign:"middle",marginRight:3}} />By date</span><h2><Scale size={18} style={{verticalAlign:"middle",marginRight:6,color:"var(--accent-good)"}} />Weight & waist</h2></div></div>
             <div className="insight-card">
               <div className="insight-heading"><div><span className="eyebrow violet">Recent entries</span><h3>Weight trend</h3></div><strong>{latestMeasurement?.weight || "--"}<small>{latestMeasurement?.weight ? " kg" : ""}</small></strong></div>
               <WeightTrend measurements={data.measurements} />
@@ -2266,7 +2268,7 @@ export default function AppV2() {
               {!sortedMeasurements.length && <p className="empty">No measurements saved yet.</p>}
             </div>
             <div className="tool-card">
-              <div className="section-heading"><div><span className="eyebrow violet">Stored locally</span><h2>Progress photos</h2></div></div>
+              <div className="section-heading"><div><span className="eyebrow violet"><Image size={11} style={{verticalAlign:"middle",marginRight:3}} />Stored locally</span><h2><Camera size={18} style={{verticalAlign:"middle",marginRight:6,color:"#a99cff"}} />Progress photos</h2></div></div>
               <p className="helper">Save front, side, and optional back photos. Images are limited to 1.5 MB each and included in backups.</p>
               <div className="photo-actions">{["Front", "Side", "Back"].map((view) => <label className="secondary file-button" key={view}>{view}<input type="file" accept="image/*" capture="environment" onChange={(event) => addProgressPhoto(event.target.files?.[0], view)} /></label>)}</div>
               <div className="photo-grid">{data.progressPhotos.map((photo) => <figure key={photo.id}><img src={photo.dataUrl} alt={`${photo.view} progress on ${photo.date}`} /><figcaption>{photo.view} - {photo.date}</figcaption></figure>)}</div>

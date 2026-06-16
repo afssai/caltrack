@@ -1502,8 +1502,11 @@ input:focus, select:focus, textarea:focus {
   border-radius: 999px;
   background: rgba(246, 241, 225, .045);
   color: var(--ivory);
-  padding: 9px 11px;
-  min-height: 38px;
+  padding: 9px 14px;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .quick-chip {
   display: grid;
