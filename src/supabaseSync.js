@@ -466,9 +466,19 @@ export async function pushLocalData(data, session) {
   for (const [table, ids] of Object.entries(current)) await softDeleteMissing(table, previous[table] || [], ids);
 
   const rows = localRows(nextData, userId);
-  await upsert("profiles", [rows.profile], { onConflict: "id" });
+  try {
+    await upsert("profiles", [rows.profile], { onConflict: "id" });
+  } catch {
+    const { name, gender, age, height, weight, activity_level, highest_weight, medical_conditions, medications, ...coreProfile } = rows.profile;
+    await upsert("profiles", [coreProfile], { onConflict: "id" });
+  }
   await upsert("diary_entries", rows.diaryEntries);
-  await upsert("daily_logs", rows.dailyLogs);
+  try {
+    await upsert("daily_logs", rows.dailyLogs);
+  } catch {
+    const coreLogs = rows.dailyLogs.map(({ health_flags, meds_taken, ...rest }) => rest);
+    await upsert("daily_logs", coreLogs);
+  }
   await upsert("measurements", rows.measurements);
   await upsert("custom_foods", rows.customFoods);
   await upsert("pantry_items", rows.pantryItems);
