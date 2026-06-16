@@ -297,7 +297,7 @@ function openFoodFactsFood(product) {
     ingredients: product.ingredients_text || "",
     servingGrams: number(product.serving_quantity) || 100,
     per100: {
-      calories: number(nutrients["energy-kcal_100g"]),
+      calories: number(nutrients["energy-kcal_100g"]) || Math.round(number(nutrients["energy_100g"]) / 4.184),
       protein: number(nutrients.proteins_100g),
       carbs: number(nutrients.carbohydrates_100g),
       fat: number(nutrients.fat_100g),
