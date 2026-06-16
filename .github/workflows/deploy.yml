@@ -1,3 +1,8 @@
+# GitHub Pages deployment — DISABLED
+# The app runs on your local Node server (server.mjs) at http://192.168.100.43:4173
+# GitHub Pages does not support the Node API endpoints (Gemini, food search, etc.)
+# To re-enable: remove the `if: false` line from the job below.
+
 name: Deploy to GitHub Pages
 
 on:
@@ -16,6 +21,7 @@ concurrency:
 
 jobs:
   build-and-deploy:
+    if: false   # ← deployment disabled — app requires local Node server
     runs-on: ubuntu-latest
     environment:
       name: github-pages

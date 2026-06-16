@@ -392,27 +392,36 @@ function ConfidenceBadge({ value = "manual" }) {
   return <span className={`confidence ${className}`}>{label}</span>;
 }
 
-function LockScreen({ mode, onUnlock, onSetup }) {
+function LockScreen({ mode, onUnlock, onSetup, owner }) {
   const [pin, setPin] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const submit = async (event) => {
     event.preventDefault();
     if (!/^\d{4,8}$/.test(pin)) return setError("Use a 4-8 digit PIN.");
     if (mode === "setup" && pin !== confirm) return setError("PIN confirmation does not match.");
-    const ok = mode === "setup" ? await onSetup(pin) : await onUnlock(pin);
+    const ok = mode === "setup" ? await onSetup(pin, email.trim()) : await onUnlock(pin);
     if (!ok) setError("Incorrect PIN.");
   };
   return (
     <div className="lock-shell">
       <form className="lock-card" onSubmit={submit}>
-        <span className="brand-mark">CalTrack</span>
+        <span className="brand-mark">PULSE</span>
         <h1>{mode === "setup" ? "Create your PIN" : "Welcome back"}</h1>
-        <p>{mode === "setup" ? "This PIN locks CalTrack on this browser. It is not a substitute for device encryption." : "Enter your PIN to unlock your local health log."}</p>
-        <Field label="PIN" type="password" inputMode="numeric" autoComplete="off" maxLength="8" value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ""))} />
+        {mode === "unlock" && owner && (
+          <p style={{ color: "var(--blue2)", fontWeight: 600, fontSize: "12px", margin: "-4px 0 0" }}>
+            🔒 {owner}
+          </p>
+        )}
+        <p>{mode === "setup" ? "Set your email and a PIN so only you can open this app — even if someone finds the link." : "Enter your PIN to unlock your personal health log."}</p>
+        {mode === "setup" && (
+          <Field label="Your email (shown on lock screen)" type="email" inputMode="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        )}
+        <Field label="PIN (4-8 digits)" type="password" inputMode="numeric" autoComplete="off" maxLength="8" value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ""))} />
         {mode === "setup" && <Field label="Confirm PIN" type="password" inputMode="numeric" autoComplete="off" maxLength="8" value={confirm} onChange={(event) => setConfirm(event.target.value.replace(/\D/g, ""))} />}
         {error && <div className="form-error">{error}</div>}
-        <button className="primary" type="submit">{mode === "setup" ? "Create PIN" : "Unlock"}</button>
+        <button className="primary" type="submit">{mode === "setup" ? "Lock app with my PIN" : "Unlock"}</button>
       </form>
     </div>
   );
@@ -524,6 +533,39 @@ export default function AppV2() {
   const [data, setData] = useState(loadData);
   const [date, setDate] = useState(localDate);
   const [tab, setTab] = useState("diary");
+  const mainRef = useRef(null);
+
+  // Animated calorie counter
+  const [displayCalories, setDisplayCalories] = useState(0);
+  const calAnimRef = useRef(null);
+  useEffect(() => {
+    const target = Math.abs(Math.round(data.profile.calorieTarget - (data.diary[date] ? data.diary[date].reduce((s, e) => s + number(e.calories), 0) : 0)));
+    const start = displayCalories;
+    const delta = target - start;
+    if (Math.abs(delta) < 1) { setDisplayCalories(target); return; }
+    const duration = Math.min(600, Math.abs(delta) * 0.8);
+    const startTime = performance.now();
+    if (calAnimRef.current) cancelAnimationFrame(calAnimRef.current);
+    const step = (now) => {
+      const t = Math.min(1, (now - startTime) / duration);
+      const ease = 1 - Math.pow(1 - t, 3);
+      setDisplayCalories(Math.round(start + delta * ease));
+      if (t < 1) calAnimRef.current = requestAnimationFrame(step);
+    };
+    calAnimRef.current = requestAnimationFrame(step);
+    return () => { if (calAnimRef.current) cancelAnimationFrame(calAnimRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.diary[date], data.profile.calorieTarget]);
+
+  // GSAP slide-in animation on tab change
+  useEffect(() => {
+    if (mainRef.current && window.gsap) {
+      window.gsap.fromTo(mainRef.current,
+        { opacity: 0, y: 16, scale: 0.985 },
+        { opacity: 1, y: 0, scale: 1, duration: 0.38, ease: "power3.out" }
+      );
+    }
+  }, [tab]);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState("");
@@ -629,7 +671,7 @@ export default function AppV2() {
 
   useEffect(() => {
     if (!supabaseConfig.configured) {
-      setCloudHealth({ status: "missing-config", message: "Cloud backup is not available in this copy of CalTrack. Your data is still saved on this device." });
+      setCloudHealth({ status: "missing-config", message: "Cloud backup is not available in this copy of PULSE. Your data is still saved on this device." });
       return undefined;
     }
     if (!online) {
@@ -717,12 +759,12 @@ export default function AppV2() {
     if (message === "Failed to fetch" || error instanceof TypeError) return "Could not connect. Check your internet connection and try again.";
     if (message.includes("USDA_API_KEY")) return "USDA search is not available right now. Try barcode search or manual entry.";
     if (message.includes("GEMINI_API_KEY")) return "AI help is not available right now.";
-    if (message.includes("VITE_SUPABASE") || message.includes("Supabase is not configured")) return "Cloud backup is not available in this copy of CalTrack.";
+    if (message.includes("VITE_SUPABASE") || message.includes("Supabase is not configured")) return "Cloud backup is not available in this copy of PULSE.";
     return message || fallback;
   }
 
   async function sendCloudLink() {
-    if (!supabaseConfig.configured) return flash("Cloud backup is not available in this copy of CalTrack.");
+    if (!supabaseConfig.configured) return flash("Cloud backup is not available in this copy of PULSE.");
     setSyncing(true);
     try {
       await sendMagicLink(authEmail.trim());
@@ -738,11 +780,11 @@ export default function AppV2() {
   }
 
   async function runCloudSync({ quiet = false } = {}) {
-    if (!supabaseConfig.configured) return flash("Cloud backup is not available in this copy of CalTrack.");
+    if (!supabaseConfig.configured) return flash("Cloud backup is not available in this copy of PULSE.");
     if (!cloudSession?.user?.id) return flash("Sign in before syncing.");
     if (!online) return flash("Offline mode: local changes are saved and will sync when you are online.");
     setSyncing(true);
-    if (!quiet) setNotice("Syncing your CalTrack data...");
+    if (!quiet) setNotice("Syncing your PULSE data...");
     try {
       const merged = await syncCalTrack(data, cloudSession);
       setData(merged);
@@ -768,10 +810,11 @@ export default function AppV2() {
     setOnboardingDismissed(true);
   }
 
-  async function setupPin(pin) {
+  async function setupPin(pin, owner = "") {
     const next = await hashPin(pin);
-    localStorage.setItem(SECURITY_KEY, JSON.stringify(next));
-    setSecurity(next);
+    const record = { ...next, owner: owner || data.profile.name || "" };
+    localStorage.setItem(SECURITY_KEY, JSON.stringify(record));
+    setSecurity(record);
     setLocked(false);
     return true;
   }
@@ -788,8 +831,9 @@ export default function AppV2() {
     if (pinChange.next !== pinChange.confirm || !/^\d{4,8}$/.test(pinChange.next)) return flash("New PINs must match and contain 4-8 digits.");
     if (security && !(await unlock(pinChange.current))) return flash("Current PIN is incorrect.");
     const next = await hashPin(pinChange.next);
-    localStorage.setItem(SECURITY_KEY, JSON.stringify(next));
-    setSecurity(next);
+    const record = { ...next, owner: security?.owner || data.profile.name || "" };
+    localStorage.setItem(SECURITY_KEY, JSON.stringify(record));
+    setSecurity(record);
     setLocked(false);
     setPinChange({ current: "", next: "", confirm: "" });
     flash(security ? "PIN changed." : "PIN lock created.");
@@ -917,6 +961,15 @@ export default function AppV2() {
       cacheFoodResult(food, query).catch(() => null);
     }
     flash(`${food.name} added to ${meal.toLowerCase()}.`);
+    // Celebrate when hitting calorie goal
+    try {
+      const all = [...(current.diary[date] || [])];
+      const eaten = all.reduce((s, e) => s + number(e.calories), 0) + number(logForm.calories || 0);
+      const goal = number(data.profile.calorieTarget);
+      if (goal > 0 && eaten >= goal * 0.98 && eaten <= goal * 1.05 && window.confetti) {
+        window.confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 }, colors: ["#FF4500","#FF7A00","#00E5FF","#A78BFA"] });
+      }
+    } catch {}
   }
 
   function confirmSelectedFood() {
@@ -1318,7 +1371,7 @@ export default function AppV2() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `caltrack-backup-${localDate()}.json`;
+    link.download = `pulse-backup-${localDate()}.json`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -1332,7 +1385,7 @@ export default function AppV2() {
       setData({ ...defaultData, ...parsed, profile: { ...defaultData.profile, ...parsed.profile } });
       flash("Backup imported.");
     } catch {
-      flash("That file is not a valid CalTrack backup.");
+      flash("That file is not a valid PULSE backup.");
     }
   }
 
@@ -1386,13 +1439,13 @@ export default function AppV2() {
   const projectedWeeks = remainingWeight > 0 && weeklyWeightChange < -0.05 ? remainingWeight / Math.abs(weeklyWeightChange) : null;
   const estimatedGoalDate = projectedWeeks ? new Date(Date.now() + projectedWeeks * 604800000).toLocaleDateString() : null;
 
-  if (locked) return <LockScreen mode="unlock" onUnlock={unlock} />;
+  if (locked) return <LockScreen mode="unlock" onUnlock={unlock} owner={security?.owner} />;
 
   return (
     <div className="app-shell">
       <header className="topbar">
         <div>
-          <span className="brand-mark">CalTrack</span>
+          <span className="brand-mark">PULSE</span>
           <h1>{tab === "diary" ? (() => { const h = new Date().getHours(); const g = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; const n = data.profile.name ? `, ${data.profile.name.split(" ")[0]}` : ""; return `${g}${n}.`; })() : ["add", "tools"].includes(tab) ? "Log with confidence." : tab === "coach" ? "Pantry & recipes." : tab === "progress" ? "Progress over time." : "Your profile."}</h1>
         </div>
         <input
@@ -1406,10 +1459,18 @@ export default function AppV2() {
       </header>
 
       <section className="calorie-card">
+        {/* EKG heartbeat line */}
+        <div className="ekg-wrap" aria-hidden="true">
+          {/* 1200-unit SVG, 4 QRS beats (2 per 600-unit half) → at 7s animation = ~1 beat every 3.5s */}
+          <svg className="ekg-svg" viewBox="0 0 1200 36" xmlns="http://www.w3.org/2000/svg">
+            <path className="ekg-path"
+              d="M0,18 L110,18 L120,15 L124,21 L128,2 L131,34 L135,7 L142,18 L290,18 L300,15 L304,21 L308,2 L311,34 L315,7 L322,18 L600,18 L710,18 L720,15 L724,21 L728,2 L731,34 L735,7 L742,18 L890,18 L900,15 L904,21 L908,2 L911,34 L915,7 L922,18 L1200,18"/>
+          </svg>
+        </div>
         <div className="calorie-copy">
           <span className="eyebrow">{date === localDate() ? "Today's energy" : date}</span>
-          <strong>{Math.abs(Math.round(remaining))}</strong>
-          <small>{remaining >= 0 ? "calories available" : "calories over target"}</small>
+          <strong className={caloriePercent >= 100 ? "cal-over" : ""}>{displayCalories}</strong>
+          <small>{remaining >= 0 ? "calories remaining" : "calories over target"}</small>
           <div className="calorie-equation"><span>{Math.round(totals.calories)} eaten</span><i /><span>{number(data.profile.calorieTarget)} goal</span></div>
         </div>
         <div className="ring" style={{ "--progress": `${caloriePercent * 3.6}deg` }}>
@@ -1428,13 +1489,13 @@ export default function AppV2() {
       </section>
 
       {notice && <div className="notice" role="status">{notice}</div>}
-      <main>
+      <main ref={mainRef}>
         {tab === "diary" && (
           <section className="panel">
             {isNewUser && (
               <div className="onboarding-card">
                 <button className="dismiss-button" aria-label="Dismiss getting started" onClick={dismissOnboarding}>Close</button>
-                <span className="eyebrow">Welcome to CalTrack</span>
+                <span className="eyebrow">Welcome to PULSE</span>
                 <h2>Start with one honest entry.</h2>
                 <p>Start locally, then sign in with email when you want cloud backup across your own devices. Set your targets, log your first meal, and your dashboard becomes useful immediately.</p>
                 <div className="onboarding-steps">
@@ -1843,7 +1904,7 @@ export default function AppV2() {
                 Your data is saved on this device first. Cloud backup is optional and never deletes your local data during setup.
               </p>
               {!supabaseConfig.configured && (
-                <div className="cloud-health"><strong>Local backup mode</strong><span>Cloud backup is not available in this copy of CalTrack. Export a backup file any time below.</span></div>
+                <div className="cloud-health"><strong>Local backup mode</strong><span>Cloud backup is not available in this copy of PULSE. Export a backup file any time below.</span></div>
               )}
               {supabaseConfig.configured && (
                 <div className={`cloud-health ${cloudHealth.status === "error" ? "bad" : "good"}`}>
@@ -1883,7 +1944,7 @@ export default function AppV2() {
               <button className="secondary" onClick={() => importRef.current?.click()}>Import backup</button>
               <input ref={importRef} hidden type="file" accept="application/json" onChange={(event) => importData(event.target.files?.[0])} />
               <button className="danger-button" onClick={() => {
-                if (window.confirm("Delete all CalTrack data stored in this browser?")) setData(defaultData);
+                if (window.confirm("Delete all PULSE data stored in this browser?")) setData(defaultData);
               }}>Delete all local data</button>
             </div>
             <div className="helper" style={{fontSize:"11px",padding:"0 4px"}}>Your data lives on this device. Cloud backup is optional. The PIN is a screen lock only.</div>
@@ -1893,12 +1954,12 @@ export default function AppV2() {
 
       <nav className="bottom-nav" aria-label="Primary navigation">
         {[
-          ["diary", "Today", "◈"],
-          ["add", "Add", "⊕"],
-          ["tools", "Tools", "⊞"],
-          ["coach", "Pantry", "❧"],
-          ["progress", "Stats", "◎"],
-          ["settings", "Profile", "◉"],
+          ["diary", "Today", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="8" cy="15" r="1" fill="currentColor"/><circle cx="12" cy="15" r="1" fill="currentColor"/></svg>],
+          ["add", "Add", <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>],
+          ["tools", "Tools", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>],
+          ["coach", "Pantry", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/><path d="M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2"/><rect x="5" y="6" width="14" height="14" rx="1"/></svg>],
+          ["progress", "Stats", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>],
+          ["settings", "Profile", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>],
         ].map(([key, label, icon]) => (
           <button key={key} className={tab === key ? "active" : ""} onClick={() => setTab(key)}>
             <span className="nav-icon">{icon}</span>
