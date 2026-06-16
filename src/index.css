@@ -941,8 +941,8 @@ body::after { display: none; }
   object-fit: contain;
 }
 .lock-logo {
-  height: 72px;
-  margin-bottom: 12px;
+  height: 38px;
+  margin-bottom: 16px;
 }
 .app-logo {
   height: 90px;
