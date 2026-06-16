@@ -1,5 +1,5 @@
 const MAX_TEXT_LENGTH = 4000;
-const MAX_IMAGE_LENGTH = 2_050_000;
+const MAX_IMAGE_LENGTH = 5_000_000;
 const ALLOWED_MODES = new Set(["daily-review", "nutrition-label", "ingredients", "restaurant", "portion", "recipe", "meal-photo"]);
 
 function setSecurityHeaders(res) {

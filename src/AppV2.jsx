@@ -1417,12 +1417,23 @@ export default function AppV2() {
     setNotice("Analysing your food photo with AI…");
     try {
       const optimized = await optimizeImage(file);
+      let imageData = optimized.dataUrl;
+      if (imageData.length > 3_000_000) {
+        const bmp = await createImageBitmap(optimized.blob);
+        const ratio = Math.min(1, 900 / Math.max(bmp.width, bmp.height));
+        const cvs = document.createElement("canvas");
+        cvs.width = Math.round(bmp.width * ratio);
+        cvs.height = Math.round(bmp.height * ratio);
+        cvs.getContext("2d").drawImage(bmp, 0, 0, cvs.width, cvs.height);
+        bmp.close?.();
+        imageData = await new Promise((res) => cvs.toBlob((b) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(b); }, "image/jpeg", 0.72));
+      }
       const response = await fetch("/api/gemini", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode: "meal-photo",
-          image: optimized.dataUrl,
+          image: imageData,
           daily: { totals, calorieTarget: data.profile.calorieTarget },
           pantry: data.pantry,
         }),
