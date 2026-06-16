@@ -1,0 +1,733 @@
+[
+  {
+    "buttons": [
+      {
+        "disabled": false,
+        "text": "Remove"
+      },
+      {
+        "disabled": false,
+        "text": "Add food"
+      },
+      {
+        "disabled": false,
+        "text": "Remove"
+      },
+      {
+        "disabled": false,
+        "text": "Remove"
+      },
+      {
+        "disabled": false,
+        "text": "Add lunch +"
+      },
+      {
+        "disabled": false,
+        "text": "Remove"
+      },
+      {
+        "disabled": false,
+        "text": "Remove"
+      },
+      {
+        "disabled": false,
+        "text": "Diary"
+      },
+      {
+        "disabled": false,
+        "text": "Add"
+      },
+      {
+        "disabled": false,
+        "text": "Tools"
+      },
+      {
+        "disabled": false,
+        "text": "Coach"
+      },
+      {
+        "disabled": false,
+        "text": "Progress"
+      },
+      {
+        "disabled": false,
+        "text": "Settings"
+      }
+    ],
+    "fields": [
+      {
+        "disabled": false,
+        "label": "Water consumed ml",
+        "type": "input:number",
+        "value": "750"
+      },
+      {
+        "disabled": false,
+        "label": "Add activity Choose activity Swimming Walking Strength training Other",
+        "type": "select:select-one",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Swimming minutes",
+        "type": "input:number",
+        "value": "30"
+      },
+      {
+        "disabled": false,
+        "label": "Energy, hunger, training, sleep, or anything worth remembering...",
+        "type": "textarea:textarea",
+        "value": "Audit note: felt good after swimming."
+      }
+    ],
+    "headings": [
+      "Your day, in focus.",
+      "Calorie rhythm",
+      "Weight trend",
+      "Water, activity & notes",
+      "Based on today's log",
+      "Food diary"
+    ],
+    "screen": "Diary"
+  },
+  {
+    "buttons": [
+      {
+        "disabled": false,
+        "text": "Search OFF"
+      },
+      {
+        "disabled": false,
+        "text": "Search USDA"
+      },
+      {
+        "disabled": false,
+        "text": "Look up barcode"
+      },
+      {
+        "disabled": false,
+        "text": "Save reusable food"
+      },
+      {
+        "disabled": false,
+        "text": "Save to pantry"
+      },
+      {
+        "disabled": false,
+        "text": "Add"
+      },
+      {
+        "disabled": false,
+        "text": "Delete"
+      },
+      {
+        "disabled": false,
+        "text": "Diary"
+      },
+      {
+        "disabled": false,
+        "text": "Add"
+      },
+      {
+        "disabled": false,
+        "text": "Tools"
+      },
+      {
+        "disabled": false,
+        "text": "Coach"
+      },
+      {
+        "disabled": false,
+        "text": "Progress"
+      },
+      {
+        "disabled": false,
+        "text": "Settings"
+      }
+    ],
+    "fields": [
+      {
+        "disabled": false,
+        "label": "Search a food or product",
+        "type": "input:text",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Enter barcode digits",
+        "type": "input:text",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Food name",
+        "type": "input:text",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Brand (optional)",
+        "type": "input:text",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Serving size g",
+        "type": "input:number",
+        "value": "100"
+      },
+      {
+        "disabled": false,
+        "label": "Calories per serving kcal",
+        "type": "input:number",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Protein per serving g",
+        "type": "input:number",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Carbs per serving g",
+        "type": "input:number",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Fat per serving g",
+        "type": "input:number",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Fiber per serving g",
+        "type": "input:number",
+        "value": ""
+      }
+    ],
+    "headings": [
+      "Log with confidence.",
+      "Find food",
+      "Custom food entry",
+      "Saved custom foods"
+    ],
+    "screen": "Add"
+  },
+  {
+    "buttons": [
+      {
+        "disabled": false,
+        "text": "Whole package"
+      },
+      {
+        "disabled": false,
+        "text": "Half package"
+      },
+      {
+        "disabled": false,
+        "text": "Quarter"
+      },
+      {
+        "disabled": false,
+        "text": "Add calculated amount to diary"
+      },
+      {
+        "disabled": false,
+        "text": "Analyze with optional AI"
+      },
+      {
+        "disabled": false,
+        "text": "Diary"
+      },
+      {
+        "disabled": false,
+        "text": "Add"
+      },
+      {
+        "disabled": false,
+        "text": "Tools"
+      },
+      {
+        "disabled": false,
+        "text": "Coach"
+      },
+      {
+        "disabled": false,
+        "text": "Progress"
+      },
+      {
+        "disabled": false,
+        "text": "Settings"
+      }
+    ],
+    "fields": [
+      {
+        "disabled": false,
+        "label": "Take label photo",
+        "type": "input:file",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Choose from gallery",
+        "type": "input:file",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Food/package name",
+        "type": "input:text",
+        "value": "Audit crackers"
+      },
+      {
+        "disabled": false,
+        "label": "Meal Breakfast Lunch Dinner Snack",
+        "type": "select:select-one",
+        "value": "Snack"
+      },
+      {
+        "disabled": false,
+        "label": "Serving size g",
+        "type": "input:number",
+        "value": "30"
+      },
+      {
+        "disabled": false,
+        "label": "Package weight g",
+        "type": "input:number",
+        "value": "180"
+      },
+      {
+        "disabled": false,
+        "label": "Amount eaten g",
+        "type": "input:number",
+        "value": "90"
+      },
+      {
+        "disabled": false,
+        "label": "Calories per serving kcal",
+        "type": "input:number",
+        "value": "120"
+      },
+      {
+        "disabled": false,
+        "label": "Protein per serving g",
+        "type": "input:number",
+        "value": "3"
+      },
+      {
+        "disabled": false,
+        "label": "Carbs per serving g",
+        "type": "input:number",
+        "value": "20"
+      },
+      {
+        "disabled": false,
+        "label": "Fat per serving g",
+        "type": "input:number",
+        "value": "4"
+      },
+      {
+        "disabled": false,
+        "label": "Fiber per serving g",
+        "type": "input:number",
+        "value": "2"
+      },
+      {
+        "disabled": false,
+        "label": "Analysis type Daily nutrition review Nutrition label analysis Ingredient and warning analysis Restaurant meal estimate Portion and protein estimate",
+        "type": "select:select-one",
+        "value": "daily-review"
+      },
+      {
+        "disabled": false,
+        "label": "Optional image",
+        "type": "input:file",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Paste ingredients, describe the meal, or add context...",
+        "type": "textarea:textarea",
+        "value": "Audit test: chicken rice with sauce"
+      }
+    ],
+    "headings": [
+      "Log with confidence.",
+      "Nutrition label OCR",
+      "Package calculator",
+      "AI nutrition helper"
+    ],
+    "screen": "Tools"
+  },
+  {
+    "buttons": [
+      {
+        "disabled": false,
+        "text": "Save ingredient"
+      },
+      {
+        "disabled": false,
+        "text": "Edit"
+      },
+      {
+        "disabled": false,
+        "text": "Delete"
+      },
+      {
+        "disabled": false,
+        "text": "Save recipe"
+      },
+      {
+        "disabled": false,
+        "text": "Log recipe"
+      },
+      {
+        "disabled": false,
+        "text": "Generate optional AI suggestion"
+      },
+      {
+        "disabled": false,
+        "text": "Diary"
+      },
+      {
+        "disabled": false,
+        "text": "Add"
+      },
+      {
+        "disabled": false,
+        "text": "Tools"
+      },
+      {
+        "disabled": false,
+        "text": "Coach"
+      },
+      {
+        "disabled": false,
+        "text": "Progress"
+      },
+      {
+        "disabled": false,
+        "text": "Settings"
+      }
+    ],
+    "fields": [
+      {
+        "disabled": false,
+        "label": "Ingredient",
+        "type": "input:text",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Serving grams g",
+        "type": "input:number",
+        "value": "100"
+      },
+      {
+        "disabled": false,
+        "label": "Calories kcal",
+        "type": "input:number",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Protein g",
+        "type": "input:number",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Carbs g",
+        "type": "input:number",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Fat g",
+        "type": "input:number",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Fiber g",
+        "type": "input:number",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Recipe title",
+        "type": "input:text",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Meal type breakfast lunch dinner snack smoothie salad",
+        "type": "select:select-one",
+        "value": "breakfast"
+      },
+      {
+        "disabled": false,
+        "label": "Add pantry ingredient Choose ingredient Audit oats",
+        "type": "select:select-one",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Steps to prepare...",
+        "type": "textarea:textarea",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Why this matches your goal...",
+        "type": "textarea:textarea",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "AI mode Recipe ideas from pantry Restaurant meal photo estimate Daily nutrition review",
+        "type": "select:select-one",
+        "value": "daily-review"
+      },
+      {
+        "disabled": false,
+        "label": "Optional photo",
+        "type": "input:file",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "High protein, diabetes friendly, low refined carbs, low sodium where practical...",
+        "type": "textarea:textarea",
+        "value": "Audit test: chicken rice with sauce"
+      }
+    ],
+    "headings": [
+      "Cook from what you have.",
+      "Pantry & smart recipes",
+      "Data-based guidance",
+      "Pantry",
+      "Recipe builder",
+      "Recipe or meal photo ideas"
+    ],
+    "screen": "Coach"
+  },
+  {
+    "buttons": [
+      {
+        "disabled": false,
+        "text": "Save measurement"
+      },
+      {
+        "disabled": false,
+        "text": "Delete"
+      },
+      {
+        "disabled": false,
+        "text": "Diary"
+      },
+      {
+        "disabled": false,
+        "text": "Add"
+      },
+      {
+        "disabled": false,
+        "text": "Tools"
+      },
+      {
+        "disabled": false,
+        "text": "Coach"
+      },
+      {
+        "disabled": false,
+        "text": "Progress"
+      },
+      {
+        "disabled": false,
+        "text": "Settings"
+      }
+    ],
+    "fields": [
+      {
+        "disabled": false,
+        "label": "Weight on 2026-06-16 kg",
+        "type": "input:number",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Waist on 2026-06-16 cm",
+        "type": "input:number",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Front",
+        "type": "input:file",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Side",
+        "type": "input:file",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Back",
+        "type": "input:file",
+        "value": ""
+      }
+    ],
+    "headings": [
+      "Progress over time.",
+      "Weight & waist",
+      "Weight trend",
+      "Protein trend",
+      "Progress photos"
+    ],
+    "screen": "Progress"
+  },
+  {
+    "buttons": [
+      {
+        "disabled": true,
+        "text": "Send Supabase sign-in link"
+      },
+      {
+        "disabled": false,
+        "text": "Lock now"
+      },
+      {
+        "disabled": false,
+        "text": "Change PIN"
+      },
+      {
+        "disabled": false,
+        "text": "Export backup"
+      },
+      {
+        "disabled": false,
+        "text": "Import backup"
+      },
+      {
+        "disabled": false,
+        "text": "Delete all local data"
+      },
+      {
+        "disabled": false,
+        "text": "Diary"
+      },
+      {
+        "disabled": false,
+        "text": "Add"
+      },
+      {
+        "disabled": false,
+        "text": "Tools"
+      },
+      {
+        "disabled": false,
+        "text": "Coach"
+      },
+      {
+        "disabled": false,
+        "text": "Progress"
+      },
+      {
+        "disabled": false,
+        "text": "Settings"
+      }
+    ],
+    "fields": [
+      {
+        "disabled": false,
+        "label": "Daily calorie goal kcal",
+        "type": "input:number",
+        "value": "2100"
+      },
+      {
+        "disabled": false,
+        "label": "Protein goal g",
+        "type": "input:number",
+        "value": "140"
+      },
+      {
+        "disabled": false,
+        "label": "Carbs goal g",
+        "type": "input:number",
+        "value": "220"
+      },
+      {
+        "disabled": false,
+        "label": "Fat goal g",
+        "type": "input:number",
+        "value": "65"
+      },
+      {
+        "disabled": false,
+        "label": "Fiber goal g",
+        "type": "input:number",
+        "value": "30"
+      },
+      {
+        "disabled": false,
+        "label": "Water goal ml",
+        "type": "input:number",
+        "value": "2500"
+      },
+      {
+        "disabled": false,
+        "label": "Goal weight kg",
+        "type": "input:number",
+        "value": "95"
+      },
+      {
+        "disabled": false,
+        "label": "Session timeout minutes",
+        "type": "input:number",
+        "value": "15"
+      },
+      {
+        "disabled": false,
+        "label": "Email for magic link",
+        "type": "input:email",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Current PIN",
+        "type": "input:password",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "New PIN",
+        "type": "input:password",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Confirm new PIN",
+        "type": "input:password",
+        "value": ""
+      },
+      {
+        "disabled": false,
+        "label": "Import backup",
+        "type": "input:file",
+        "value": ""
+      }
+    ],
+    "headings": [
+      "Make it yours.",
+      "Settings",
+      "Supabase backup & sync",
+      "Change PIN"
+    ],
+    "screen": "Settings"
+  }
+]

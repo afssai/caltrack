@@ -60,6 +60,53 @@ async function usda(request, response) {
   send(response, apiResponse.status, payload);
 }
 
+async function openFoodFacts(request, response) {
+  const input = await body(request);
+  if (!validText(input.query, 200)) return send(response, 400, { error: "Enter a food name." });
+  const query = input.query.trim();
+  const pageSize = Math.min(25, Math.max(1, Number(input.pageSize) || 20));
+  const params = new URLSearchParams({
+    search_terms: query,
+    search_simple: "1",
+    action: "process",
+    json: "1",
+    page_size: String(pageSize),
+    sort_by: "unique_scans_n",
+    fields: "code,product_name,generic_name,brands,serving_quantity,ingredients_text,nutriments",
+  });
+  const headers = {
+    Accept: "application/json",
+    "User-Agent": "CalTrack/2.0 (personal calorie tracker)",
+  };
+  const readJson = async (apiResponse) => {
+    const contentType = apiResponse.headers.get("content-type") || "";
+    if (!apiResponse.ok || !contentType.includes("application/json")) throw new Error("Open Food Facts search failed.");
+    return apiResponse.json();
+  };
+  const normalize = (payload) => {
+    if (Array.isArray(payload.products)) return payload;
+    return {
+      products: (payload.hits || []).map((hit) => ({
+        code: hit.code,
+        product_name: hit.product_name || hit.product_name_en || hit.generic_name || query,
+        generic_name: hit.generic_name || "",
+        brands: Array.isArray(hit.brands) ? hit.brands.join(", ") : hit.brands || "",
+        serving_quantity: hit.serving_quantity,
+        ingredients_text: hit.ingredients_text || hit.ingredients_text_en || "",
+        nutriments: hit.nutriments || {},
+      })),
+    };
+  };
+  try {
+    const primary = await fetch(`https://world.openfoodfacts.org/cgi/search.pl?${params}`, { headers });
+    send(response, 200, normalize(await readJson(primary)));
+  } catch {
+    const fallbackParams = new URLSearchParams({ q: query, page_size: String(pageSize) });
+    const fallback = await fetch(`https://search.openfoodfacts.org/search?${fallbackParams}`, { headers });
+    send(response, 200, normalize(await readJson(fallback)));
+  }
+}
+
 async function ai(request, response) {
   if (!process.env.GEMINI_API_KEY) return send(response, 503, { error: "GEMINI_API_KEY is not configured on the server." });
   const input = await body(request);
@@ -101,7 +148,9 @@ async function staticFile(request, response) {
 
 createServer(async (request, response) => {
   try {
-    if (limited(request.socket.remoteAddress || "unknown")) return send(response, 429, { error: "Too many requests. Try again shortly." });
+    const isApiRequest = request.url?.startsWith("/api/");
+    if (isApiRequest && limited(request.socket.remoteAddress || "unknown")) return send(response, 429, { error: "Too many requests. Try again shortly." });
+    if (request.method === "POST" && request.url === "/api/open-food-facts") return await openFoodFacts(request, response);
     if (request.method === "POST" && request.url === "/api/usda") return await usda(request, response);
     if (request.method === "POST" && request.url === "/api/gemini") return await ai(request, response);
     if (request.method === "GET" || request.method === "HEAD") return await staticFile(request, response);

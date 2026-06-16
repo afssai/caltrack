@@ -1,0 +1,50 @@
+{
+  "Tools": [
+    {
+      "accept": "image/*",
+      "capture": "environment",
+      "label": "Take label photo"
+    },
+    {
+      "accept": "image/*",
+      "capture": null,
+      "label": "Choose from gallery"
+    },
+    {
+      "accept": "image/*",
+      "capture": "environment",
+      "label": "Optional image"
+    }
+  ],
+  "Coach": [
+    {
+      "accept": "image/*",
+      "capture": "environment",
+      "label": "Optional photo"
+    }
+  ],
+  "Progress": [
+    {
+      "accept": "image/*",
+      "capture": "environment",
+      "label": "Front"
+    },
+    {
+      "accept": "image/*",
+      "capture": "environment",
+      "label": "Side"
+    },
+    {
+      "accept": "image/*",
+      "capture": "environment",
+      "label": "Back"
+    }
+  ],
+  "Settings": [
+    {
+      "accept": "application/json",
+      "capture": null,
+      "label": ""
+    }
+  ]
+}

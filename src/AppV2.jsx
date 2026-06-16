@@ -1,15 +1,21 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createWorker } from "tesseract.js";
 import {
+  cacheFoodResult,
   checkSupabaseConnection,
+  enableCloudSync,
   getCurrentSession,
   optimizeImage,
+  pullRemoteData,
   readSyncStatus,
+  searchFoodCache,
   sendMagicLink,
   signOut,
+  subscribeToAuthChanges,
   supabaseConfig,
   syncCalTrack,
 } from "./supabaseSync";
+import { STARTER_FOODS } from "./starterFoods";
 
 const STORAGE_KEY = "caltrack.v2";
 const SECURITY_KEY = "caltrack.v2.security";
@@ -24,8 +30,8 @@ const CONFIDENCE = {
   ai: ["AI Estimate", "confidence-blue"],
 };
 const API = {
+  openFoodFacts: "/api/open-food-facts",
   usda: "/api/usda",
-  gemini: "/api/gemini",
 };
 
 const defaultData = {
@@ -224,6 +230,109 @@ function usdaFood(food) {
   };
 }
 
+function foodKey(food) {
+  return `${food.source || ""}:${food.sourceId || food.id || food.name}`.toLowerCase();
+}
+
+function mergeFoods(...groups) {
+  const seen = new Set();
+  const merged = [];
+  for (const group of groups) {
+    for (const food of group || []) {
+      const key = foodKey(food);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(food);
+    }
+  }
+  return merged;
+}
+
+function searchSavedFoods(foods, query) {
+  const term = query.trim().toLowerCase();
+  if (!term) return [];
+  return (foods || []).filter((food) =>
+    [food.name, food.brand, food.source, food.ingredients].filter(Boolean).join(" ").toLowerCase().includes(term),
+  );
+}
+
+function searchStarterFoods(query) {
+  return searchSavedFoods(STARTER_FOODS, query);
+}
+
+function parseAiNutrition(text) {
+  const normalized = text.toLowerCase();
+  const extractRange = (pattern) => {
+    const match = normalized.match(pattern);
+    if (!match) return "";
+    const low = Number(match[1]);
+    const high = Number(match[2] || match[1]);
+    if (!low || low <= 0) return "";
+    return Math.round((low + high) / 2);
+  };
+  const firstSentence = text.split(/[.\n]/)[0].replace(/estimate only[.:]*\s*/i, "").trim();
+  const name = firstSentence.length > 3 && firstSentence.length < 80 ? firstSentence : "AI food photo estimate";
+  return {
+    name,
+    calories: extractRange(/calori(?:es)?[^0-9]{0,30}(\d+)(?:\s*[-–to]+\s*(\d+))?/),
+    protein: extractRange(/protein[^0-9]{0,20}(\d+)(?:\s*[-–to]+\s*(\d+))?/),
+    carbs: extractRange(/carb(?:ohydrate)?s?[^0-9]{0,20}(\d+)(?:\s*[-–to]+\s*(\d+))?/),
+    fat: extractRange(/(?:total )?fat[^0-9]{0,20}(\d+)(?:\s*[-–to]+\s*(\d+))?/),
+    fiber: extractRange(/fi(?:bre|ber)[^0-9]{0,20}(\d+)(?:\s*[-–to]+\s*(\d+))?/),
+  };
+}
+
+function foodAlreadySaved(foods, food) {
+  const sourceKey = food.sourceId || food.id;
+  return (foods || []).some((saved) => {
+    if (sourceKey && (saved.sourceId === sourceKey || saved.id === sourceKey)) return true;
+    return saved.name.toLowerCase() === food.name.toLowerCase() && (saved.brand || "").toLowerCase() === (food.brand || "").toLowerCase();
+  });
+}
+
+function rememberedFood(food) {
+  return {
+    id: makeId(),
+    name: food.name,
+    brand: food.brand || "",
+    source: food.source || "Saved food",
+    sourceId: food.sourceId || food.id || "",
+    confidence: food.confidence || "manual",
+    servingGrams: number(food.servingGrams) || 100,
+    ingredients: food.ingredients || "",
+    per100: food.per100,
+  };
+}
+
+function mergeById(localRows = [], remoteRows = []) {
+  const merged = new Map();
+  for (const row of localRows) merged.set(row.id, row);
+  for (const row of remoteRows) merged.set(row.id, { ...(merged.get(row.id) || {}), ...row });
+  return [...merged.values()];
+}
+
+function mergeDiary(localDiary = {}, remoteDiary = {}) {
+  const dates = new Set([...Object.keys(localDiary), ...Object.keys(remoteDiary)]);
+  const diary = {};
+  for (const entryDate of dates) diary[entryDate] = mergeById(localDiary[entryDate] || [], remoteDiary[entryDate] || []);
+  return diary;
+}
+
+function mergeAccountData(localData, remoteData) {
+  return {
+    ...localData,
+    ...remoteData,
+    profile: { ...localData.profile, ...(remoteData.profile || {}) },
+    diary: mergeDiary(localData.diary, remoteData.diary),
+    dailyLogs: { ...(localData.dailyLogs || {}), ...(remoteData.dailyLogs || {}) },
+    measurements: mergeById(localData.measurements || [], remoteData.measurements || []),
+    customFoods: mergeById(localData.customFoods || [], remoteData.customFoods || []),
+    pantry: mergeById(localData.pantry || [], remoteData.pantry || []),
+    recipes: mergeById(localData.recipes || [], remoteData.recipes || []),
+    progressPhotos: mergeById(localData.progressPhotos || [], remoteData.progressPhotos || []),
+  };
+}
+
 function Field({ label, suffix, ...props }) {
   return (
     <label className="field">
@@ -257,36 +366,6 @@ function ConfidenceBadge({ value = "manual" }) {
   return <span className={`confidence ${className}`}>{label}</span>;
 }
 
-function deploymentAvailability() {
-  if (typeof window === "undefined") return { mode: "unknown", title: "Deployment unknown", body: "Server feature availability depends on the host." };
-  const host = window.location.hostname;
-  if (host.endsWith("github.io")) {
-    return {
-      mode: "basic",
-      title: "GitHub Pages basic mode",
-      body: "Local tracking, PIN lock, OCR, backup/import, Open Food Facts search, and barcode lookup can work here. USDA and Gemini require the Vercel deployment because GitHub Pages cannot run secure backend API routes.",
-    };
-  }
-  return {
-    mode: "full",
-    title: "Vercel/full mode ready",
-    body: "This host can use internal API routes for USDA and optional Gemini when the server environment variables are configured. Gemini remains optional.",
-  };
-}
-
-function FeatureAvailability({ availability }) {
-  return (
-    <div className={`availability-card ${availability.mode === "basic" ? "basic" : "full"}`}>
-      <strong>{availability.title}</strong>
-      <p>{availability.body}</p>
-      <div className="availability-grid">
-        <span>GitHub Pages: local diary, PIN, OCR, Open Food Facts, barcode, backups</span>
-        <span>Vercel: everything above plus USDA and optional Gemini server routes</span>
-      </div>
-    </div>
-  );
-}
-
 function LockScreen({ mode, onUnlock, onSetup }) {
   const [pin, setPin] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -301,7 +380,7 @@ function LockScreen({ mode, onUnlock, onSetup }) {
   return (
     <div className="lock-shell">
       <form className="lock-card" onSubmit={submit}>
-        <span className="brand-mark">CalTrack <i>V2</i></span>
+        <span className="brand-mark">CalTrack</span>
         <h1>{mode === "setup" ? "Create your PIN" : "Welcome back"}</h1>
         <p>{mode === "setup" ? "This PIN locks CalTrack on this browser. It is not a substitute for device encryption." : "Enter your PIN to unlock your local health log."}</p>
         <Field label="PIN" type="password" inputMode="numeric" autoComplete="off" maxLength="8" value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ""))} />
@@ -414,7 +493,6 @@ function ActivityTrend({ logs }) {
 }
 
 export default function AppV2() {
-  const availability = useMemo(deploymentAvailability, []);
   const [security, setSecurity] = useState(readSecurity);
   const [locked, setLocked] = useState(() => Boolean(readSecurity()));
   const [data, setData] = useState(loadData);
@@ -443,14 +521,15 @@ export default function AppV2() {
     ...EMPTY_NUTRITION,
   });
   const [pinChange, setPinChange] = useState({ current: "", next: "", confirm: "" });
-  const [aiForm, setAiForm] = useState({ mode: "daily-review", text: "", image: null, preview: "" });
-  const [aiResult, setAiResult] = useState(null);
   const [pantryDraft, setPantryDraft] = useState({ name: "", grams: 100, confidence: "manual", ...EMPTY_NUTRITION });
   const [recipeDraft, setRecipeDraft] = useState({ title: "", type: "breakfast", steps: "", reason: "", items: [] });
   const [editingPantryId, setEditingPantryId] = useState("");
   const [measurement, setMeasurement] = useState({ weight: "", waist: "" });
   const [ocrText, setOcrText] = useState("");
   const [ocrProgress, setOcrProgress] = useState(0);
+  const [aiPhotoResult, setAiPhotoResult] = useState("");
+  const [mealDescription, setMealDescription] = useState("");
+  const [aiDailyReview, setAiDailyReview] = useState("");
   const [cloudSession, setCloudSession] = useState(null);
   const [syncStatus, setSyncStatus] = useState(readSyncStatus);
   const [authEmail, setAuthEmail] = useState("");
@@ -462,6 +541,7 @@ export default function AppV2() {
   );
   const importRef = useRef(null);
   const syncTimer = useRef(null);
+  const cloudLoadedUser = useRef("");
 
   useEffect(() => {
     try {
@@ -474,16 +554,41 @@ export default function AppV2() {
   useEffect(() => {
     if (!supabaseConfig.configured) return undefined;
     let cancelled = false;
-    async function loadSession() {
+    async function loadSession(session) {
       try {
-        const session = await getCurrentSession();
-        if (!cancelled) setCloudSession(session);
+        const activeSession = session || await getCurrentSession();
+        if (cancelled) return;
+        setCloudSession(activeSession);
+        if (activeSession?.user?.id && cloudLoadedUser.current !== activeSession.user.id) {
+          cloudLoadedUser.current = activeSession.user.id;
+          const meta = enableCloudSync();
+          setSyncStatus(meta);
+          const remoteData = await pullRemoteData(loadData()).catch(() => null);
+          if (remoteData && !cancelled) {
+            setData((current) => mergeAccountData(current, remoteData));
+            flash("Account data loaded. Local data was preserved.");
+          }
+        }
       } catch {
-        if (!cancelled) setCloudSession(null);
+        if (!cancelled) {
+          cloudLoadedUser.current = "";
+          setCloudSession(null);
+        }
       }
     }
     loadSession();
-    return () => { cancelled = true; };
+    const unsubscribe = subscribeToAuthChanges((session) => {
+      if (!session) {
+        cloudLoadedUser.current = "";
+        setCloudSession(null);
+        return;
+      }
+      loadSession(session);
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -498,7 +603,7 @@ export default function AppV2() {
 
   useEffect(() => {
     if (!supabaseConfig.configured) {
-      setCloudHealth({ status: "missing-config", message: "Supabase environment variables are not configured." });
+      setCloudHealth({ status: "missing-config", message: "Cloud backup is not available in this copy of CalTrack. Your data is still saved on this device." });
       return undefined;
     }
     if (!online) {
@@ -574,35 +679,52 @@ export default function AppV2() {
     window.setTimeout(() => setNotice(""), 4500);
   }
 
+  function handleDateChange(nextDate) {
+    if (!nextDate) return;
+    setDate(nextDate);
+    const saved = data.measurements.find((item) => item.date === nextDate);
+    setMeasurement(saved ? { weight: saved.weight || "", waist: saved.waist || "" } : { weight: "", waist: "" });
+  }
+
+  function friendlyError(error, fallback = "Something went wrong. Please try again.") {
+    const message = String(error?.message || "");
+    if (message === "Failed to fetch" || error instanceof TypeError) return "Could not connect. Check your internet connection and try again.";
+    if (message.includes("USDA_API_KEY")) return "USDA search is not available right now. Try barcode search or manual entry.";
+    if (message.includes("GEMINI_API_KEY")) return "AI help is not available right now.";
+    if (message.includes("VITE_SUPABASE") || message.includes("Supabase is not configured")) return "Cloud backup is not available in this copy of CalTrack.";
+    return message || fallback;
+  }
+
   async function sendCloudLink() {
-    if (!supabaseConfig.configured) return flash("Supabase publishable key is not configured.");
+    if (!supabaseConfig.configured) return flash("Cloud backup is not available in this copy of CalTrack.");
     setSyncing(true);
     try {
       await sendMagicLink(authEmail.trim());
-      setCloudHealth({ status: "reachable", message: "Supabase accepted the magic-link request. Check your email." });
-      flash("Check your email for the Supabase sign-in link.");
+      setCloudHealth({ status: "reachable", message: "Sign-in link sent. Check your email." });
+      flash("Check your email for the sign-in link.");
     } catch (error) {
-      setCloudHealth({ status: "error", message: error.message || "Could not send sign-in link." });
-      flash(error.message || "Could not send sign-in link.");
+      const message = friendlyError(error, "Could not send the sign-in link.");
+      setCloudHealth({ status: "error", message });
+      flash(message);
     } finally {
       setSyncing(false);
     }
   }
 
   async function runCloudSync({ quiet = false } = {}) {
-    if (!supabaseConfig.configured) return flash("Supabase publishable key is not configured.");
+    if (!supabaseConfig.configured) return flash("Cloud backup is not available in this copy of CalTrack.");
     if (!cloudSession?.user?.id) return flash("Sign in before syncing.");
     if (!online) return flash("Offline mode: local changes are saved and will sync when you are online.");
     setSyncing(true);
-    if (!quiet) setNotice("Syncing local CalTrack data to Supabase...");
+    if (!quiet) setNotice("Syncing your CalTrack data...");
     try {
       const merged = await syncCalTrack(data, cloudSession);
       setData(merged);
       const nextStatus = readSyncStatus();
       setSyncStatus(nextStatus);
-      if (!quiet) flash("Supabase sync complete. Local data was preserved.");
+      if (!quiet) flash("Cloud backup complete. Local data was preserved.");
     } catch (error) {
-      if (!quiet) flash(error.message || "Supabase sync failed. Local data is still safe.");
+      if (!quiet) flash(friendlyError(error, "Cloud backup failed. Local data is still safe."));
       throw error;
     } finally {
       setSyncing(false);
@@ -612,7 +734,7 @@ export default function AppV2() {
   async function disconnectCloud() {
     await signOut();
     setCloudSession(null);
-    flash("Signed out of Supabase. Local data remains on this device.");
+    flash("Signed out of cloud backup. Local data remains on this device.");
   }
 
   function dismissOnboarding() {
@@ -638,12 +760,13 @@ export default function AppV2() {
 
   async function changePin() {
     if (pinChange.next !== pinChange.confirm || !/^\d{4,8}$/.test(pinChange.next)) return flash("New PINs must match and contain 4-8 digits.");
-    if (!(await unlock(pinChange.current))) return flash("Current PIN is incorrect.");
+    if (security && !(await unlock(pinChange.current))) return flash("Current PIN is incorrect.");
     const next = await hashPin(pinChange.next);
     localStorage.setItem(SECURITY_KEY, JSON.stringify(next));
     setSecurity(next);
+    setLocked(false);
     setPinChange({ current: "", next: "", confirm: "" });
-    flash("PIN changed.");
+    flash(security ? "PIN changed." : "PIN lock created.");
   }
 
   function updateDailyLog(patch) {
@@ -735,7 +858,9 @@ export default function AppV2() {
   }
 
   function logRecipe(recipe) {
-    saveFoodToDiary({ name: recipe.title, source: "Saved recipe", confidence: recipe.confidence, per100: recipe.totals }, 100, "Dinner");
+    const mealMap = { breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", snack: "Snack" };
+    const meal = mealMap[recipe.type?.toLowerCase()] || "Dinner";
+    saveFoodToDiary({ name: recipe.title, source: "Saved recipe", confidence: recipe.confidence, per100: recipe.totals }, 100, meal);
   }
 
   function saveFoodToDiary(food, grams, meal) {
@@ -754,10 +879,17 @@ export default function AppV2() {
       per100: food.per100,
       ...nutrition,
     };
+    const shouldRemember = !["Saved recipe", "Package calculator"].includes(food.source || "");
     setData((current) => ({
       ...current,
       diary: { ...current.diary, [date]: [...(current.diary[date] || []), entry] },
+      customFoods: shouldRemember && !foodAlreadySaved(current.customFoods, food)
+        ? [rememberedFood(food), ...current.customFoods]
+        : current.customFoods,
     }));
+    if (["Open Food Facts", "USDA FoodData Central"].includes(food.source || "")) {
+      cacheFoodResult(food, query).catch(() => null);
+    }
     flash(`${food.name} added to ${meal.toLowerCase()}.`);
   }
 
@@ -784,7 +916,7 @@ export default function AppV2() {
       await request();
       setNotice("");
     } catch (error) {
-      setNotice(error.message || "Something went wrong. Please try again.");
+      setNotice(friendlyError(error));
     } finally {
       setBusy(false);
     }
@@ -801,26 +933,65 @@ export default function AppV2() {
   async function searchOpenFoodFacts() {
     if (!requireQuery()) return;
     setResults([]);
-    runRequest("Searching Open Food Facts...", async () => {
-      const params = new URLSearchParams({
-        search_terms: query.trim(),
-        search_simple: "1",
-        action: "process",
-        json: "1",
-        page_size: "20",
-        fields: "code,product_name,generic_name,brands,serving_quantity,ingredients_text,nutriments",
-      });
-      // The world search host currently omits browser CORS headers; the French
-      // Open Food Facts host queries the same global product database with CORS.
-      const response = await fetch(`https://fr.openfoodfacts.org/cgi/search.pl?${params}`);
-      if (!response.ok) throw new Error("Open Food Facts search failed.");
-      const payload = await response.json();
-      const foods = (payload.products || [])
-        .map(openFoodFactsFood)
-        .filter((food) => food.per100.calories > 0);
+    runRequest("Searching foods...", async () => {
+      const searchTerm = query.trim();
+      const saved = searchSavedFoods(data.customFoods, searchTerm);
+      const cached = await searchFoodCache(searchTerm);
+      const starter = searchStarterFoods(searchTerm);
+      const localMatches = mergeFoods(saved, cached, starter);
+      if (localMatches.length) setResults(localMatches);
+      let openFoodFacts = [];
+      try {
+        const payload = await searchOpenFoodFactsPayload(searchTerm);
+        openFoodFacts = (payload.products || [])
+          .map(openFoodFactsFood)
+          .filter((food) => food.per100.calories > 0);
+      } catch (error) {
+        if (!localMatches.length) throw error;
+      }
+      let usda = [];
+      try {
+        usda = await searchUsdaFoods(searchTerm);
+      } catch {
+        usda = [];
+      }
+      const foods = mergeFoods(localMatches, openFoodFacts, usda);
       setResults(foods);
       if (!foods.length) throw new Error("No foods with nutrition data were found.");
     });
+  }
+
+  async function searchOpenFoodFactsPayload(searchTerm) {
+    const fetchWithTimeout = async (url, options = {}) => {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 4500);
+      try {
+        return await fetch(url, { ...options, signal: controller.signal });
+      } finally {
+        window.clearTimeout(timeout);
+      }
+    };
+    const localResponse = await fetchWithTimeout(API.openFoodFacts, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: searchTerm, pageSize: 20 }),
+    }).catch(() => null);
+    if (localResponse?.ok && localResponse.headers.get("content-type")?.includes("application/json")) {
+      return localResponse.json();
+    }
+
+    const params = new URLSearchParams({
+      search_terms: searchTerm,
+      search_simple: "1",
+      action: "process",
+      json: "1",
+      page_size: "20",
+      sort_by: "unique_scans_n",
+      fields: "code,product_name,generic_name,brands,serving_quantity,ingredients_text,nutriments",
+    });
+    const response = await fetchWithTimeout(`https://world.openfoodfacts.org/cgi/search.pl?${params}`);
+    if (!response.ok) throw new Error("Food search is unavailable right now. Try again in a moment.");
+    return response.json();
   }
 
   async function lookupBarcode() {
@@ -843,17 +1014,21 @@ export default function AppV2() {
     if (!requireQuery()) return;
     setResults([]);
     runRequest("Searching USDA FoodData Central...", async () => {
-      const response = await fetch(API.usda, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: query.trim(), pageSize: 20 }),
-      });
-      if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "USDA search is unavailable. Use Vercel/full mode with USDA_API_KEY configured.");
-      const payload = await response.json();
-      const foods = (payload.foods || []).map(usdaFood).filter((food) => food.per100.calories > 0);
+      const foods = await searchUsdaFoods(query.trim());
       setResults(foods);
       if (!foods.length) throw new Error("No USDA foods with calorie data were found.");
     });
+  }
+
+  async function searchUsdaFoods(searchTerm) {
+    const response = await fetch(API.usda, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: searchTerm, pageSize: 20 }),
+    });
+    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "USDA search is not available right now. Try barcode search or manual entry.");
+    const payload = await response.json();
+    return (payload.foods || []).map(usdaFood).filter((food) => food.per100.calories > 0);
   }
 
   function saveCustomFood() {
@@ -920,6 +1095,133 @@ export default function AppV2() {
     } catch (error) {
       console.error(error);
       setNotice("OCR could not read that image. Try a brighter, straight-on close-up.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function analyzeFoodPhoto(file) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return flash("Choose an image file.");
+    if (file.size > MAX_IMAGE_BYTES) return flash("Image is too large. Use a photo under 1.5 MB.");
+    setBusy(true);
+    setNotice("Analysing your food photo with AI…");
+    try {
+      const optimized = await optimizeImage(file);
+      const response = await fetch("/api/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "meal-photo",
+          image: optimized.dataUrl,
+          daily: { totals, calorieTarget: data.profile.calorieTarget },
+          pantry: data.pantry,
+        }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || "AI analysis failed.");
+      }
+      const { analysis } = await response.json();
+      const parsed = parseAiNutrition(analysis);
+      setAiPhotoResult(analysis);
+      setCustom((current) => ({
+        ...current,
+        name: parsed.name,
+        servingGrams: 100,
+        calories: parsed.calories || "",
+        protein: parsed.protein || "",
+        carbs: parsed.carbs || "",
+        fat: parsed.fat || "",
+        fiber: parsed.fiber || "",
+        confidence: "ai",
+      }));
+      setNotice("AI estimate ready — verify every value before saving.");
+    } catch (error) {
+      flash(friendlyError(error, "Photo analysis failed. Try manual entry instead."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function describeMealToAi() {
+    if (!mealDescription.trim()) return flash("Type what you ate first.");
+    setBusy(true);
+    setNotice("AI is estimating your meal…");
+    try {
+      const response = await fetch("/api/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "portion",
+          text: mealDescription.trim(),
+          daily: { totals, calorieTarget: data.profile.calorieTarget },
+        }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || "AI request failed.");
+      }
+      const { analysis } = await response.json();
+      const parsed = parseAiNutrition(analysis);
+      setAiPhotoResult(analysis);
+      setCustom((current) => ({
+        ...current,
+        name: parsed.name || mealDescription.trim().slice(0, 60),
+        servingGrams: 100,
+        calories: parsed.calories || "",
+        protein: parsed.protein || "",
+        carbs: parsed.carbs || "",
+        fat: parsed.fat || "",
+        fiber: parsed.fiber || "",
+        confidence: "ai",
+      }));
+      setNotice("AI estimate ready — check and adjust the values below before saving.");
+    } catch (error) {
+      flash(friendlyError(error, "AI estimation failed. Try manual entry instead."));
+      setNotice("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function getDailyAiReview() {
+    setBusy(true);
+    setNotice("AI is reviewing your day…");
+    try {
+      const response = await fetch("/api/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "daily-review",
+          text: `Review my food diary for today (${date}) and give me honest, personalised advice. Be specific about what I should eat for the rest of the day to hit my targets.`,
+          daily: {
+            date,
+            items,
+            totals,
+            targets: {
+              calories: data.profile.calorieTarget,
+              protein: data.profile.proteinTarget,
+              carbs: data.profile.carbsTarget,
+              fat: data.profile.fatTarget,
+              fiber: data.profile.fiberTarget,
+              water: data.profile.waterTarget,
+            },
+            water: dailyLog.water,
+            activities: dailyLog.activities,
+          },
+        }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || "AI review failed.");
+      }
+      const { analysis } = await response.json();
+      setAiDailyReview(analysis);
+      setNotice("");
+    } catch (error) {
+      flash(friendlyError(error, "AI review failed. Make sure your Gemini API key is configured."));
+      setNotice("");
     } finally {
       setBusy(false);
     }
@@ -1033,30 +1335,6 @@ export default function AppV2() {
     }
   }
 
-  async function runAi() {
-    setBusy(true);
-    setAiResult(null);
-    try {
-      let image = null;
-      if (aiForm.image) {
-        if (aiForm.image.size > MAX_IMAGE_BYTES) throw new Error("AI image must be under 1.5 MB.");
-        image = await fileToDataUrl(aiForm.image);
-      }
-      const response = await fetch(API.gemini, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: aiForm.mode, text: aiForm.text, image, daily: { totals, goals: data.profile, water: dailyLog.water }, pantry: data.pantry, recipes: data.recipes }),
-      });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "AI service unavailable.");
-      setAiResult(payload);
-    } catch (error) {
-      flash(error.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   const recentDays = Array.from({ length: 7 }, (_, index) => dateOffset(index - 6));
   const recentTotals = recentDays.map((day) => totalsFor(data.diary[day] || []));
   const weeklyAverage = round(recentTotals.reduce((sum, item) => sum + item.calories, 0) / 7);
@@ -1078,14 +1356,13 @@ export default function AppV2() {
   const projectedWeeks = remainingWeight > 0 && weeklyWeightChange < -0.05 ? remainingWeight / Math.abs(weeklyWeightChange) : null;
   const estimatedGoalDate = projectedWeeks ? new Date(Date.now() + projectedWeeks * 604800000).toLocaleDateString() : null;
 
-  if (!security) return <LockScreen mode="setup" onSetup={setupPin} />;
   if (locked) return <LockScreen mode="unlock" onUnlock={unlock} />;
 
   return (
     <div className="app-shell">
       <header className="topbar">
         <div>
-          <span className="brand-mark">CalTrack <i>V2</i></span>
+          <span className="brand-mark">CalTrack</span>
           <h1>{tab === "diary" ? "Your day, in focus." : ["add", "tools"].includes(tab) ? "Log with confidence." : tab === "coach" ? "Cook from what you have." : tab === "progress" ? "Progress over time." : "Make it yours."}</h1>
         </div>
         <input
@@ -1093,7 +1370,8 @@ export default function AppV2() {
           aria-label="Diary date"
           type="date"
           value={date}
-          onChange={(event) => setDate(event.target.value)}
+          onChange={(event) => handleDateChange(event.target.value)}
+          onInput={(event) => handleDateChange(event.currentTarget.value)}
         />
       </header>
 
@@ -1120,8 +1398,6 @@ export default function AppV2() {
       </section>
 
       {notice && <div className="notice" role="status">{notice}</div>}
-      {availability.mode === "basic" && <FeatureAvailability availability={availability} />}
-
       <main>
         {tab === "diary" && (
           <section className="panel">
@@ -1130,7 +1406,7 @@ export default function AppV2() {
                 <button className="dismiss-button" aria-label="Dismiss getting started" onClick={dismissOnboarding}>Close</button>
                 <span className="eyebrow">Welcome to CalTrack</span>
                 <h2>Start with one honest entry.</h2>
-                <p>No account, no fake AI, no complicated setup. Set your targets, log your first meal, and your dashboard becomes useful immediately.</p>
+                <p>Start locally, then sign in with email when you want cloud backup across your own devices. Set your targets, log your first meal, and your dashboard becomes useful immediately.</p>
                 <div className="onboarding-steps">
                   <div><b>01</b><span>Set daily goals</span></div>
                   <div><b>02</b><span>Log a meal</span></div>
@@ -1170,6 +1446,25 @@ export default function AppV2() {
 
             {!!coach.length && <div className="coach-card"><span className="eyebrow">Personal coach</span><h2>Based on today's log</h2>{coach.map((item) => <div className="coach-item" key={item.title}><strong>{item.title}</strong><p>{item.body}</p></div>)}</div>}
 
+            <div className="ai-review-section">
+              <div className="section-heading">
+                <div><span className="eyebrow violet">AI-powered</span><h2>Ask AI to review today</h2></div>
+                <button className="secondary compact" disabled={busy} onClick={getDailyAiReview}>
+                  {busy ? "Reviewing…" : "Review my day"}
+                </button>
+              </div>
+              {aiDailyReview && (
+                <div className="ai-result">
+                  <div className="ai-result-header">
+                    <strong>AI daily review</strong>
+                    <button className="text-button" onClick={() => setAiDailyReview("")}>Dismiss</button>
+                  </div>
+                  <p style={{ whiteSpace: "pre-wrap" }}>{aiDailyReview}</p>
+                </div>
+              )}
+              {!aiDailyReview && <p className="helper">AI will read your diary for today and suggest what to eat next to hit your targets.</p>}
+            </div>
+
             <div className="section-heading">
               <div>
                 <span className="eyebrow crimson">{date === localDate() ? "Today" : date}</span>
@@ -1208,18 +1503,54 @@ export default function AppV2() {
         {tab === "add" && (
           <section className="panel stack">
             <div className="section-heading">
-              <div><span className="eyebrow">Live data sources</span><h2>Find food</h2></div>
+              <div><span className="eyebrow">Add food</span><h2>Search, choose, log</h2></div>
             </div>
             <div className="search-line">
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search a food or product" />
-              <button className="primary" disabled={busy} onClick={searchOpenFoodFacts}>Search OFF</button>
-              <button className="secondary" disabled={busy} onClick={searchUsda}>Search USDA</button>
+              <button className="primary" disabled={busy} onClick={searchOpenFoodFacts}>Search foods</button>
             </div>
             <div className="barcode-line">
               <input inputMode="numeric" value={barcode} onChange={(event) => setBarcode(event.target.value)} placeholder="Enter barcode digits" />
               <button className="secondary" disabled={busy} onClick={lookupBarcode}>Look up barcode</button>
             </div>
-            <p className="helper">Searches Open Food Facts or USDA live. Barcode lookup uses the printed number and does not pretend to scan with the camera.</p>
+            <p className="helper">Search checks your saved foods first, then common starter foods, then live nutrition sources when needed.</p>
+
+            <hr />
+            <div className="section-heading">
+              <div><span className="eyebrow crimson">AI-powered</span><h2>Describe your meal</h2></div>
+            </div>
+            <p className="helper">Type what you ate in plain English — AI will estimate the calories and nutrition for you to review.</p>
+            <div className="search-line">
+              <input
+                value={mealDescription}
+                onChange={(event) => setMealDescription(event.target.value)}
+                onKeyDown={(event) => event.key === "Enter" && !busy && describeMealToAi()}
+                placeholder="e.g. nasi lemak with egg and sambal, teh tarik"
+              />
+              <button className="primary" disabled={busy} onClick={describeMealToAi}>Estimate</button>
+            </div>
+
+            <hr />
+            <div className="section-heading">
+              <div><span className="eyebrow violet">AI-powered</span><h2>Snap your food</h2></div>
+            </div>
+            <p className="helper">Take a photo of your meal or plate. AI will estimate the calories and nutrition — you can review and adjust before logging.</p>
+            <div className="scanner-actions">
+              <label className="primary file-button">
+                📷 Take food photo
+                <input type="file" accept="image/*" capture="environment" disabled={busy} onChange={(event) => analyzeFoodPhoto(event.target.files?.[0])} />
+              </label>
+              <label className="secondary file-button">
+                Choose from gallery
+                <input type="file" accept="image/*" disabled={busy} onChange={(event) => analyzeFoodPhoto(event.target.files?.[0])} />
+              </label>
+            </div>
+            {aiPhotoResult && (
+              <details className="ai-result">
+                <summary><strong>AI analysis result</strong> — values pre-filled in Custom entry below</summary>
+                <p>{aiPhotoResult}</p>
+              </details>
+            )}
 
             {!!results.length && <div className="result-list">
               {results.map((food) => (
@@ -1233,7 +1564,6 @@ export default function AppV2() {
                     {food.ingredients && <p className="ingredients"><strong>Ingredients:</strong> {food.ingredients}</p>}
                   </div>
                   <button className="primary compact" onClick={() => openLogFood(food)}>Review & add</button>
-                  <button className="secondary compact" onClick={() => saveFoodToPantry(food)}>Save pantry</button>
                 </article>
               ))}
             </div>}
@@ -1254,23 +1584,6 @@ export default function AppV2() {
               <Field label="Fiber per serving" suffix="g" type="number" min="0" value={custom.fiber} onChange={(event) => updateCustom({ fiber: event.target.value })} />
             </div>
             <button className="primary" onClick={saveCustomFood}>Save reusable food</button>
-            <button className="secondary" onClick={() => {
-              if (!custom.name.trim()) return flash("Add a custom food name first.");
-              const grams = number(custom.servingGrams) || 100;
-              saveFoodToPantry({
-                name: custom.name.trim(),
-                brand: custom.brand.trim(),
-                source: "Custom food",
-                confidence: "manual",
-                per100: {
-                  calories: round((number(custom.calories) / grams) * 100),
-                  protein: round((number(custom.protein) / grams) * 100),
-                  carbs: round((number(custom.carbs) / grams) * 100),
-                  fat: round((number(custom.fat) / grams) * 100),
-                  fiber: round((number(custom.fiber) / grams) * 100),
-                },
-              }, grams);
-            }}>Save to pantry</button>
 
             {!!data.customFoods.length && (
               <div className="saved-foods">
@@ -1350,21 +1663,9 @@ export default function AppV2() {
             <button className="primary" onClick={logPackageAmount}>Add calculated amount to diary</button>
             </div>
 
-            <div className="tool-card">
-              <div className="section-heading"><div><span className="eyebrow violet">Optional server feature</span><h2>AI nutrition helper</h2></div><span className="feature-badge">Never auto-saves</span></div>
-              <p className="helper">Requires GEMINI_API_KEY on the server. Results are suggestions only, show confidence, and must be reviewed before manually logging anything.</p>
-              <div className="form-grid">
-                <label className="field"><span>Analysis type</span><select value={aiForm.mode} onChange={(event) => setAiForm({ ...aiForm, mode: event.target.value })}><option value="daily-review">Daily nutrition review</option><option value="nutrition-label">Nutrition label analysis</option><option value="ingredients">Ingredient and warning analysis</option><option value="restaurant">Restaurant meal estimate</option><option value="portion">Portion and protein estimate</option></select></label>
-                <label className="field"><span>Optional image</span><input type="file" accept="image/*" capture="environment" onChange={(event) => setAiForm({ ...aiForm, image: event.target.files?.[0] || null })} /></label>
-              </div>
-              <label className="field"><span>Context or ingredients</span><textarea value={aiForm.text} onChange={(event) => setAiForm({ ...aiForm, text: event.target.value.slice(0, 4000) })} placeholder="Paste ingredients, describe the meal, or add context..." /></label>
-              <button className="secondary" disabled={busy} onClick={runAi}>Analyze with optional AI</button>
-              {aiResult && <div className="ai-result"><ConfidenceBadge value="ai" /><strong>{aiForm.mode === "restaurant" ? "Estimate only" : "AI suggestion"}</strong><span>Confidence: {aiResult.confidence || "unknown"}</span><pre>{aiResult.analysis}</pre><p>Review and confirm manually. This result has not changed your diary.</p></div>}
-            </div>
-
             <div className="limitation">
               <strong>Restaurant plate photos</strong>
-              <p>CalTrack does not fake plate-photo AI. Reliable restaurant plate estimation requires a paid or free external vision API to be connected later, and estimates should still be reviewed.</p>
+              <p>CalTrack does not estimate restaurant plate photos in V1. Use label, barcode, package, or manual entry for now.</p>
             </div>
           </section>
         )}
@@ -1409,17 +1710,6 @@ export default function AppV2() {
               <div className="recipe-list">{data.recipes.map((recipe) => <article className="result-card" key={recipe.id}><div><span className="source">{recipe.type}</span><strong>{recipe.title}</strong><p>{recipe.totals.calories} kcal / P {recipe.totals.protein} / C {recipe.totals.carbs} / F {recipe.totals.fat} / Fiber {recipe.totals.fiber}</p><ConfidenceBadge value={recipe.confidence} /><p>{recipe.reason}</p></div><button className="secondary compact" onClick={() => logRecipe(recipe)}>Log recipe</button></article>)}</div>
             </div>
 
-            <div className="tool-card">
-              <div className="section-heading"><div><span className="eyebrow violet">Optional Gemini</span><h2>Recipe or meal photo ideas</h2></div><span className="feature-badge">Estimate only</span></div>
-              <p className="helper">Gemini may suggest recipes from pantry or estimate a meal photo, but database ingredients must calculate nutrition before logging.</p>
-              <div className="form-grid">
-                <label className="field"><span>AI mode</span><select value={aiForm.mode} onChange={(event) => setAiForm({ ...aiForm, mode: event.target.value })}><option value="recipe">Recipe ideas from pantry</option><option value="meal-photo">Restaurant meal photo estimate</option><option value="daily-review">Daily nutrition review</option></select></label>
-                <label className="field"><span>Optional photo</span><input type="file" accept="image/*" capture="environment" onChange={(event) => setAiForm({ ...aiForm, image: event.target.files?.[0] || null })} /></label>
-              </div>
-              <label className="field"><span>Goals or preferences</span><textarea value={aiForm.text} onChange={(event) => setAiForm({ ...aiForm, text: event.target.value })} placeholder="High protein, diabetes friendly, low refined carbs, low sodium where practical..." /></label>
-              <button className="secondary" onClick={runAi} disabled={busy}>Generate optional AI suggestion</button>
-              {aiResult && <div className="ai-result"><ConfidenceBadge value="ai" /><strong>{aiForm.mode === "meal-photo" ? "Estimate Only" : "AI suggestion only"}</strong><span>Confidence: {aiResult.confidence || "unknown"}</span><pre>{aiResult.analysis}</pre></div>}
-            </div>
           </section>
         )}
 
@@ -1470,7 +1760,6 @@ export default function AppV2() {
         {tab === "settings" && (
           <section className="panel stack">
             <div className="section-heading"><div><span className="eyebrow">Goals & connections</span><h2>Settings</h2></div></div>
-            <FeatureAvailability availability={availability} />
             <div className="form-grid">
               <Field label="Daily calorie goal" suffix="kcal" type="number" min="0" value={data.profile.calorieTarget} onChange={(event) => setProfile({ calorieTarget: number(event.target.value) })} />
               <Field label="Protein goal" suffix="g" type="number" min="0" value={data.profile.proteinTarget} onChange={(event) => setProfile({ proteinTarget: number(event.target.value) })} />
@@ -1481,18 +1770,16 @@ export default function AppV2() {
               <Field label="Goal weight" suffix="kg" type="number" min="0" step="0.1" value={data.profile.goalWeight} onChange={(event) => setProfile({ goalWeight: event.target.value })} />
               <Field label="Session timeout" suffix="minutes" type="number" min="1" max="240" value={data.profile.sessionTimeout} onChange={(event) => setProfile({ sessionTimeout: Math.min(240, Math.max(1, number(event.target.value))) })} />
             </div>
-            <p className="helper">USDA and Gemini API keys are never stored in the browser. Configure USDA_API_KEY and GEMINI_API_KEY on the server.</p>
             <div className="tool-card cloud-card">
               <div className="section-heading">
-                <div><span className="eyebrow violet">Optional cloud sync</span><h2>Supabase backup & sync</h2></div>
-                <span className="feature-badge">{cloudHealth.status === "authenticated" ? "Signed in" : cloudHealth.status === "reachable" ? "Connected" : online ? "Online" : "Offline"}</span>
+                <div><span className="eyebrow violet">Optional backup</span><h2>Cloud backup</h2></div>
+                <span className="feature-badge">{!supabaseConfig.configured ? "Local only" : cloudHealth.status === "authenticated" ? "Signed in" : cloudHealth.status === "reachable" ? "Ready" : cloudHealth.status === "offline" ? "Offline" : cloudHealth.status === "error" ? "Needs attention" : "Checking"}</span>
               </div>
               <p className="helper">
-                Local storage remains the source of truth on this device. Supabase sync is optional, uses the publishable key only,
-                and never deletes your local data during migration.
+                Your data is saved on this device first. Cloud backup is optional and never deletes your local data during setup.
               </p>
               {!supabaseConfig.configured && (
-                <div className="form-error">Supabase publishable key is missing. Set VITE_SUPABASE_PUBLISHABLE_KEY in the deployment environment.</div>
+                <div className="cloud-health"><strong>Local backup mode</strong><span>Cloud backup is not available in this copy of CalTrack. Export a backup file any time below.</span></div>
               )}
               {supabaseConfig.configured && (
                 <div className={`cloud-health ${cloudHealth.status === "error" ? "bad" : "good"}`}>
@@ -1500,32 +1787,32 @@ export default function AppV2() {
                   <span>{cloudHealth.message}</span>
                 </div>
               )}
-              {cloudSession?.user ? (
+              {supabaseConfig.configured && cloudSession?.user ? (
                 <>
                   <div className="cloud-status">
                     <div><span>Signed in</span><strong>{cloudSession.user.email || cloudSession.user.id}</strong></div>
                     <div><span>Last sync</span><strong>{syncStatus.lastSyncedAt ? new Date(syncStatus.lastSyncedAt).toLocaleString() : "Not synced yet"}</strong></div>
                   </div>
                   <div className="settings-actions">
-                    <button className="primary" disabled={syncing || !online} onClick={() => runCloudSync()}>Migrate / sync now</button>
+                    <button className="primary" disabled={syncing || !online} onClick={() => runCloudSync()}>Back up now</button>
                     <button className="secondary" disabled={syncing} onClick={disconnectCloud}>Sign out</button>
                   </div>
-                  <p className="helper">Migration uploads current local diary, goals, pantry, recipes, measurements, and optimized progress photos. Local data stays in this browser as fallback.</p>
+                  <p className="helper">Backup uploads current local diary, goals, pantry, recipes, measurements, and optimized progress photos. Local data stays in this browser as fallback.</p>
                 </>
-              ) : (
+              ) : supabaseConfig.configured ? (
                 <>
                   <div className="form-grid">
                     <Field label="Email for magic link" type="email" value={authEmail} onChange={(event) => setAuthEmail(event.target.value)} />
                   </div>
-                  <button className="primary" disabled={syncing || !supabaseConfig.configured} onClick={sendCloudLink}>Send Supabase sign-in link</button>
-                  <p className="helper">After opening the email link, return here and use Migrate / sync now. Your PIN remains local and separate from Supabase authentication.</p>
+                  <button className="primary" disabled={syncing || !supabaseConfig.configured} onClick={sendCloudLink}>Send sign-in link</button>
+                  <p className="helper">After opening the email link, return here and use Back up now. Your PIN remains local and separate from cloud backup.</p>
                 </>
-              )}
+              ) : null}
             </div>
             <div className="tool-card">
-              <div className="section-heading"><div><span className="eyebrow crimson">Security</span><h2>Change PIN</h2></div><button className="secondary compact" onClick={() => setLocked(true)}>Lock now</button></div>
-              <div className="form-grid"><Field label="Current PIN" type="password" inputMode="numeric" value={pinChange.current} onChange={(event) => setPinChange({ ...pinChange, current: event.target.value.replace(/\D/g, "") })} /><Field label="New PIN" type="password" inputMode="numeric" value={pinChange.next} onChange={(event) => setPinChange({ ...pinChange, next: event.target.value.replace(/\D/g, "") })} /><Field label="Confirm new PIN" type="password" inputMode="numeric" value={pinChange.confirm} onChange={(event) => setPinChange({ ...pinChange, confirm: event.target.value.replace(/\D/g, "") })} /></div>
-              <button className="primary" onClick={changePin}>Change PIN</button>
+              <div className="section-heading"><div><span className="eyebrow crimson">Privacy</span><h2>{security ? "Change PIN" : "Optional PIN lock"}</h2></div>{security && <button className="secondary compact" onClick={() => setLocked(true)}>Lock now</button>}</div>
+              <div className="form-grid">{security && <Field label="Current PIN" type="password" inputMode="numeric" value={pinChange.current} onChange={(event) => setPinChange({ ...pinChange, current: event.target.value.replace(/\D/g, "") })} />}<Field label="New PIN" type="password" inputMode="numeric" value={pinChange.next} onChange={(event) => setPinChange({ ...pinChange, next: event.target.value.replace(/\D/g, "") })} /><Field label="Confirm new PIN" type="password" inputMode="numeric" value={pinChange.confirm} onChange={(event) => setPinChange({ ...pinChange, confirm: event.target.value.replace(/\D/g, "") })} /></div>
+              <button className="primary" onClick={changePin}>{security ? "Change PIN" : "Create PIN lock"}</button>
             </div>
             <div className="settings-actions">
               <button className="secondary" onClick={exportData}>Export backup</button>
@@ -1537,7 +1824,7 @@ export default function AppV2() {
             </div>
             <div className="privacy-note">
               <strong>Local-first and honest by design</strong>
-              <p>Your diary, measurements, custom foods, photos, goals, and salted PIN hash persist locally. The PIN is a practical privacy barrier, not encryption. Supabase sync is optional and separate from the PIN. CalTrack has no health/watch sync or fake scanner.</p>
+              <p>Your diary, measurements, custom foods, photos, goals, and PIN lock stay saved on this device. The PIN is a practical privacy barrier, not encryption. Cloud backup is optional and separate from the PIN.</p>
             </div>
           </section>
         )}
@@ -1545,10 +1832,10 @@ export default function AppV2() {
 
       <nav className="bottom-nav" aria-label="Primary navigation">
         {[
-          ["diary", "Diary"],
+          ["diary", "Today"],
           ["add", "Add"],
           ["tools", "Tools"],
-          ["coach", "Coach"],
+          ["coach", "Pantry"],
           ["progress", "Progress"],
           ["settings", "Settings"],
         ].map(([key, label]) => (

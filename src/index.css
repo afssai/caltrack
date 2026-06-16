@@ -285,7 +285,10 @@ hr { width: 100%; border: 0; border-top: 1px solid var(--border); margin: 10px 0
 .pantry-list, .recipe-list, .recipe-items { display: grid; gap: 8px; }
 .ai-result { display: grid; gap: 8px; border: 1px solid #29456a; border-radius: 16px; background: #111c2a; padding: 14px; }
 .ai-result pre { margin: 0; }
-.ai-result p { margin: 0; color: var(--muted); font-size: 10px; }
+.ai-result p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.ai-result strong { color: #9a7bff; font-size: 11px; }
+.ai-result-header { display: flex; justify-content: space-between; align-items: center; }
+.ai-review-section { border: 1px solid var(--border); border-radius: 20px; background: var(--surface); padding: 16px; margin-bottom: 18px; display: grid; gap: 10px; }
 .lock-shell { min-height: 100vh; display: grid; place-items: center; padding: 18px; background: radial-gradient(circle at 50% 0, #22172a, transparent 40%), #070608; }
 .lock-card { width: min(100%, 390px); display: grid; gap: 14px; border: 1px solid var(--border); border-radius: 24px; background: var(--surface); padding: 24px; }
 .lock-card h1 { margin: 4px 0 0; }

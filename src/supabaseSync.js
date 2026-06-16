@@ -25,7 +25,7 @@ function writeSyncMeta(meta) {
 }
 
 function assertConfigured() {
-  if (!supabase) throw new Error("Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.");
+  if (!supabase) throw new Error("Cloud backup is not available in this copy of CalTrack.");
 }
 
 function throwIfError(error, fallback = "Supabase request failed.") {
@@ -35,7 +35,7 @@ function throwIfError(error, fallback = "Supabase request failed.") {
 function friendlySupabaseError(error) {
   if (error?.message === "Failed to fetch" || error instanceof TypeError) {
     return new Error(
-      "Could not reach Supabase. Check the deployment Content-Security-Policy, network connection, and that the Supabase project URL is allowed.",
+      "Cloud backup could not connect. Your local data is still safe on this device.",
     );
   }
   const message = String(error?.message || "");
@@ -43,13 +43,13 @@ function friendlySupabaseError(error) {
   const code = String(error?.code || "");
   const combined = `${message} ${details} ${code}`.toLowerCase();
   if (combined.includes("could not find the table") || code === "PGRST205") {
-    return new Error("Supabase is reachable, but the CalTrack database tables are missing. Apply the Supabase migrations before syncing.");
+    return new Error("Cloud backup is not ready yet. Your local data is still safe on this device.");
   }
   if (combined.includes("permission denied") || combined.includes("grant") || code === "42501") {
-    return new Error("Supabase tables exist, but authenticated table grants or RLS policies are blocking access. Apply the latest CalTrack migration.");
+    return new Error("Cloud backup is not ready yet. Your local data is still safe on this device.");
   }
   if (combined.includes("bucket") && combined.includes("not found")) {
-    return new Error("Supabase storage is reachable, but the private progress-photos bucket is missing. Apply the Supabase migration.");
+    return new Error("Cloud photo backup is not ready yet. Your local photos are still safe on this device.");
   }
   return error;
 }
@@ -254,6 +254,79 @@ function per100FromRow(row) {
     fat: number(row.fat_per_100g),
     fiber: number(row.fiber_per_100g),
   };
+}
+
+function cacheRowToFood(row) {
+  return {
+    id: row.source_id,
+    name: row.name,
+    brand: row.brand || "",
+    source: row.source || "Food cache",
+    sourceId: row.source_id,
+    confidence: row.confidence || "manual",
+    servingGrams: number(row.serving_grams) || 100,
+    ingredients: row.ingredients || "",
+    per100: per100FromRow(row),
+  };
+}
+
+function foodSearchText(food, query = "") {
+  return [query, food.name, food.brand, food.source, food.ingredients].filter(Boolean).join(" ").toLowerCase();
+}
+
+export function subscribeToAuthChanges(callback) {
+  if (!supabase) return () => {};
+  const { data } = supabase.auth.onAuthStateChange((_event, session) => callback(session));
+  return () => data.subscription?.unsubscribe();
+}
+
+export function enableCloudSync() {
+  const meta = readSyncMeta();
+  const nextMeta = {
+    ...meta,
+    enabled: true,
+    deviceId: meta.deviceId || crypto.randomUUID(),
+  };
+  writeSyncMeta(nextMeta);
+  return nextMeta;
+}
+
+export async function searchFoodCache(query) {
+  if (!supabase || !query?.trim()) return [];
+  const term = query.trim();
+  const { data, error } = await supabase
+    .from("food_cache")
+    .select("*")
+    .ilike("search_text", `%${term}%`)
+    .limit(20);
+  if (error) return [];
+  return (data || []).map(cacheRowToFood).filter((food) => food.per100.calories > 0);
+}
+
+export async function cacheFoodResult(food, query = "") {
+  if (!supabase || !food?.name || !food?.per100) return;
+  const session = await getCurrentSession().catch(() => null);
+  if (!session?.user?.id) return;
+  const source = food.source || "Saved food";
+  const sourceId = food.sourceId || food.id || `${source}:${food.name}`.toLowerCase();
+  const row = {
+    source,
+    source_id: String(sourceId),
+    name: food.name,
+    brand: food.brand || "",
+    search_text: foodSearchText(food, query),
+    confidence: food.confidence || "manual",
+    serving_grams: number(food.servingGrams) || 100,
+    ingredients: food.ingredients || "",
+    calories_per_100g: number(food.per100.calories),
+    protein_per_100g: number(food.per100.protein),
+    carbs_per_100g: number(food.per100.carbs),
+    fat_per_100g: number(food.per100.fat),
+    fiber_per_100g: number(food.per100.fiber),
+    created_by: session.user.id,
+  };
+  const { error } = await supabase.from("food_cache").insert(row);
+  if (error && error.code !== "23505") throw error;
 }
 
 function localRows(data, userId) {
