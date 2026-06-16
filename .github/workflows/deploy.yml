@@ -34,6 +34,9 @@ jobs:
         run: npm install
 
       - name: Build
+        env:
+          VITE_SUPABASE_URL: https://mlztungodoqofuvykwpt.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_UniP_Kg7abiZg4nv5cn6lg_Lph_Rhc6
         run: npm run build
 
       - name: Upload to GitHub Pages
