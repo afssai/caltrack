@@ -941,11 +941,11 @@ body::after { display: none; }
   object-fit: contain;
 }
 .lock-logo {
-  height: 60px;
+  height: 55px;
   margin-bottom: 8px;
 }
 .app-logo {
-  height: 52px;
+  height: 47px;
   margin: 0 auto 2px;
 }
 .brand-mark {

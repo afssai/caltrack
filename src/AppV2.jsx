@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import logo1Src from "./assets/LOGO1.png";
+import logo2Src from "./assets/LOGO2.png";
 import { Droplets, Coffee, Footprints, Dumbbell, Flame, Plus, List, CalendarDays, ScanLine, User, Activity, Waves, Beef, Wheat, Leaf, Droplet, Trash2, Timer, Zap, Sun, Moon, BatteryLow, Thermometer, Brain, Camera, Package, BookOpen, Scale, Image, HeartPulse, Stethoscope, ChefHat, SlidersHorizontal, Search, ClipboardList } from "lucide-react";
 import { createWorker } from "tesseract.js";
 import {
@@ -534,7 +536,7 @@ function LockScreen({ mode, onUnlock, onSetup, owner }) {
   return (
     <div className="lock-shell">
       <form className="lock-card" onSubmit={submit}>
-        <img src="./LOGO1.png" alt="PULSE" className="brand-logo lock-logo" />
+        <img src={logo1Src} alt="PULSE" className="brand-logo lock-logo" />
         <h1>{mode === "setup" ? "Create your PIN" : "Welcome back"}</h1>
         {mode === "unlock" && owner && (
           <p style={{ color: "var(--blue2)", fontWeight: 600, fontSize: "12px", margin: "-4px 0 0" }}>
@@ -1661,7 +1663,7 @@ export default function AppV2() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <img src="./LOGO2.png" alt="PULSE" className="brand-logo app-logo" />
+        <img src={logo2Src} alt="PULSE" className="brand-logo app-logo" />
         {tab === "diary" && <p className="top-message">{todayMessage}</p>}
       </header>
 
