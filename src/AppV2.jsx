@@ -1355,20 +1355,38 @@ export default function AppV2() {
     }));
   }
 
+  async function compressImageForOcr(file) {
+    const bitmap = await createImageBitmap(file);
+    const maxDim = 1800;
+    const ratio = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+    const w = Math.round(bitmap.width * ratio);
+    const h = Math.round(bitmap.height * ratio);
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext("2d").drawImage(bitmap, 0, 0, w, h);
+    bitmap.close?.();
+    return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.88));
+  }
+
   async function scanLabel(file) {
     if (!file) return;
     if (!file.type.startsWith("image/")) return flash("Choose an image file.");
-    if (file.size > MAX_IMAGE_BYTES) return flash("Image is too large. Use an image under 1.5 MB.");
     setBusy(true);
     setOcrProgress(0);
     setNotice("Reading the nutrition label locally...");
     try {
+      let imageToScan = file;
+      if (file.size > MAX_IMAGE_BYTES) {
+        setNotice("Compressing image for OCR…");
+        imageToScan = await compressImageForOcr(file);
+      }
       const worker = await createWorker("eng", 1, {
         logger: (message) => {
           if (message.status === "recognizing text") setOcrProgress(Math.round(message.progress * 100));
         },
       });
-      const output = await worker.recognize(file);
+      const output = await worker.recognize(imageToScan);
       await worker.terminate();
       const parsed = parseNutritionLabel(output.data.text);
       setOcrText(output.data.text);
@@ -1395,7 +1413,6 @@ export default function AppV2() {
   async function analyzeFoodPhoto(file) {
     if (!file) return;
     if (!file.type.startsWith("image/")) return flash("Choose an image file.");
-    if (file.size > MAX_IMAGE_BYTES) return flash("Image is too large. Use a photo under 1.5 MB.");
     setBusy(true);
     setNotice("Analysing your food photo with AI…");
     try {
@@ -1610,7 +1627,7 @@ export default function AppV2() {
 
   async function addProgressPhoto(file, view) {
     if (!file) return;
-    if (!file.type.startsWith("image/") || file.size > MAX_IMAGE_BYTES) return flash("Use an image under 1.5 MB.");
+    if (!file.type.startsWith("image/")) return flash("Choose an image file.");
     setBusy(true);
     setNotice("Optimizing progress photo...");
     try {

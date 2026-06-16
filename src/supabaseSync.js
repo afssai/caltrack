@@ -342,6 +342,15 @@ function localRows(data, userId) {
       goal_weight: data.profile.goalWeight === "" ? null : number(data.profile.goalWeight),
       session_timeout: number(data.profile.sessionTimeout) || 15,
       onboarding_dismissed: localStorage.getItem("caltrack.v2.onboarding") === "dismissed",
+      name: data.profile.name || "",
+      gender: data.profile.gender || "",
+      age: data.profile.age === "" ? null : number(data.profile.age) || null,
+      height: data.profile.height === "" ? null : number(data.profile.height) || null,
+      weight: data.profile.weight === "" ? null : number(data.profile.weight) || null,
+      activity_level: data.profile.activityLevel || "",
+      highest_weight: data.profile.highestWeight === "" ? null : number(data.profile.highestWeight) || null,
+      medical_conditions: data.profile.medicalConditions || "",
+      medications: data.profile.medications || "",
     },
     diaryEntries: Object.entries(data.diary || {}).flatMap(([entryDate, entries]) =>
       (entries || []).map((entry) => ({
@@ -371,6 +380,8 @@ function localRows(data, userId) {
       water_ml: number(log.water),
       notes: log.notes || "",
       activities: log.activities || [],
+      health_flags: log.healthFlags || [],
+      meds_taken: log.medsTaken || [],
     })),
     measurements: (data.measurements || []).map((item) => ({
       user_id: userId,
@@ -481,6 +492,15 @@ function remoteToLocal(rows, currentData) {
         waterTarget: number(profileRow.water_target) || currentData.profile.waterTarget,
         goalWeight: profileRow.goal_weight ?? currentData.profile.goalWeight,
         sessionTimeout: number(profileRow.session_timeout) || currentData.profile.sessionTimeout,
+        name: profileRow.name || currentData.profile.name || "",
+        gender: profileRow.gender || currentData.profile.gender || "",
+        age: profileRow.age ?? currentData.profile.age ?? "",
+        height: profileRow.height ?? currentData.profile.height ?? "",
+        weight: profileRow.weight ?? currentData.profile.weight ?? "",
+        activityLevel: profileRow.activity_level || currentData.profile.activityLevel || "",
+        highestWeight: profileRow.highest_weight ?? currentData.profile.highestWeight ?? "",
+        medicalConditions: profileRow.medical_conditions || currentData.profile.medicalConditions || "",
+        medications: profileRow.medications || currentData.profile.medications || "",
       }
     : currentData.profile;
 
@@ -506,7 +526,7 @@ function remoteToLocal(rows, currentData) {
     };
     diary[entry.date] = [...(diary[entry.date] || []), entry];
   }
-  const dailyLogs = Object.fromEntries((rows.dailyLogs || []).map((row) => [row.log_date, { water: number(row.water_ml), notes: row.notes || "", activities: row.activities || [] }]));
+  const dailyLogs = Object.fromEntries((rows.dailyLogs || []).map((row) => [row.log_date, { water: number(row.water_ml), notes: row.notes || "", activities: row.activities || [], healthFlags: row.health_flags || [], medsTaken: row.meds_taken || [] }]));
   const measurements = (rows.measurements || []).map((row) => ({ id: row.local_id, date: row.measured_date, weight: row.weight ?? "", waist: row.waist ?? "" }));
   const customFoods = (rows.customFoods || []).map((row) => ({
     id: row.local_id,
