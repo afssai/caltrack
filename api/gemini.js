@@ -49,7 +49,17 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: "Invalid image." });
   }
 
-  const instruction = `You are a cautious nutrition estimation helper. Mode: ${input.mode}. Never claim certainty. Return concise plain text with: confidence level (low/medium/high), findings, warnings for hidden sugar/sodium/ultra-processing when relevant, nutrition or portion estimates as ranges, and what the user must verify. Restaurant or meal-photo analysis must start with "Estimate only". Recipe mode may suggest breakfast, lunch, dinner, snacks, smoothies, or salads from pantry ingredients, but must say database calculation is required before logging. Do not create automatic meal plans and do not claim to save data. Context: ${String(input.text || "").slice(0, 4000)}. Daily data: ${JSON.stringify(input.daily || {}).slice(0, 3000)}. Pantry: ${JSON.stringify(input.pantry || []).slice(0, 5000)}. Saved recipes: ${JSON.stringify(input.recipes || []).slice(0, 2000)}`;
+  const modeInstructions = {
+    "meal-photo": `You are a nutrition estimator. The user has sent a food photo${input.text ? ` and described it as: "${input.text}"` : ""}. Identify every food and drink visible. For each item estimate: name, portion size in grams, calories, protein (g), carbs (g), fat (g), fiber (g). Then give a TOTAL line. Format:\n- [food name]: ~[grams]g — [cal]kcal, P[g]g, C[g]g, F[g]g\nTOTAL: ~[cal]kcal, P[g]g, C[g]g, F[g]g\nConfidence: low/medium/high\nNote anything hidden (sauces, oils, dressings). Start response with "Estimate only —".`,
+    "portion": `You are a nutrition estimator. The user described: "${input.text}". Identify the foods, estimate portions and give per-item and total nutrition (calories, protein, carbs, fat, fiber). Format:\n- [food]: ~[cal]kcal, P[g]g, C[g]g, F[g]g\nTOTAL: ~[cal]kcal, P[g]g, C[g]g, F[g]g\nConfidence: low/medium/high`,
+    "nutrition-label": `Extract nutrition facts from this label photo. Return: serving size (g), calories, protein (g), carbs (g), fat (g), fiber (g). If unclear say so.`,
+    "ingredients": `Estimate nutrition for these ingredients: ${input.text}. Give per-ingredient and total (calories, protein, carbs, fat, fiber).`,
+    "restaurant": `Estimate nutrition for this restaurant meal: ${input.text}. Give total calories, protein, carbs, fat, fiber. Note hidden oils/sauces. Start with "Estimate only —".`,
+    "recipe": `Suggest a recipe using these pantry items: ${JSON.stringify(input.pantry || []).slice(0, 3000)}. Give ingredients, steps, and estimated total nutrition (calories, protein, carbs, fat, fiber). State values are estimates.`,
+    "daily-review": `Review this daily food log: ${JSON.stringify(input.daily || {}).slice(0, 3000)}. Comment on balance, missing nutrients, and one actionable suggestion. Keep it under 100 words.`,
+  };
+  const instruction = modeInstructions[input.mode] || `Nutrition analysis mode: ${input.mode}. Context: ${String(input.text || "").slice(0, 4000)}.`;
+  const parts = [{ text: instruction }];
   const parts = [{ text: instruction }];
 
   if (input.image) {

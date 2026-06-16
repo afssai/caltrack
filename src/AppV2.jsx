@@ -1434,6 +1434,7 @@ export default function AppV2() {
         body: JSON.stringify({
           mode: "meal-photo",
           image: imageData,
+          text: mealDescription.trim() || undefined,
           daily: { totals, calorieTarget: data.profile.calorieTarget },
           pantry: data.pantry,
         }),
@@ -2026,6 +2027,13 @@ export default function AppV2() {
               <div><span className="eyebrow violet">AI-powered</span><h2><Camera size={18} style={{verticalAlign:"middle",marginRight:6,color:"#4dc3ff"}} />Snap your food</h2></div>
             </div>
             <p className="helper">Take a photo of your meal or plate. AI will estimate the calories and nutrition — you can review and adjust before logging.</p>
+            <div className="search-line" style={{marginBottom:8}}>
+              <input
+                value={mealDescription}
+                onChange={(event) => setMealDescription(event.target.value)}
+                placeholder="Optional: describe the meal to help AI (e.g. rice and grilled chicken)"
+              />
+            </div>
             <div className="scanner-actions">
               <label className="primary file-button">
                 📷 Take food photo
