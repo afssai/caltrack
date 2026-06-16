@@ -25,7 +25,7 @@ function writeSyncMeta(meta) {
 }
 
 function assertConfigured() {
-  if (!supabase) throw new Error("Cloud backup is not available in this copy of CalTrack.");
+  if (!supabase) throw new Error("Cloud backup is not available in this copy of PULSE.");
 }
 
 function throwIfError(error, fallback = "Supabase request failed.") {
@@ -83,7 +83,7 @@ export async function checkSupabaseConnection() {
       databaseReady: true,
       storageReady: true,
       session: data.session,
-      message: "Supabase Auth, CalTrack tables, and private photo storage are reachable for this session.",
+      message: "Supabase Auth, PULSE tables, and private photo storage are reachable for this session.",
     };
   } catch (error) {
     throw friendlySupabaseError(error);
