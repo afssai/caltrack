@@ -966,24 +966,18 @@ export default function AppV2() {
       const starter = searchStarterFoods(searchTerm);
       const localMatches = mergeFoods(saved, cached, starter);
       if (localMatches.length) setResults(localMatches);
+      // Open Food Facts is free — no API key needed
       let openFoodFacts = [];
       try {
         const payload = await searchOpenFoodFactsPayload(searchTerm);
-        openFoodFacts = (payload.products || [])
-          .map(openFoodFactsFood)
-          .filter((food) => food.per100.calories > 0);
+        openFoodFacts = (payload.products || []).map(openFoodFactsFood).filter((food) => food.per100.calories > 0);
       } catch (error) {
         if (!localMatches.length) throw error;
       }
-      let usda = [];
-      try {
-        usda = await searchUsdaFoods(searchTerm);
-      } catch {
-        usda = [];
-      }
-      const foods = mergeFoods(localMatches, openFoodFacts, usda);
+      // USDA only called via dedicated button to preserve API quota
+      const foods = mergeFoods(localMatches, openFoodFacts);
       setResults(foods);
-      if (!foods.length) throw new Error("No foods with nutrition data were found.");
+      if (!foods.length) throw new Error("No foods found. Try the USDA Search button or enter manually.");
     });
   }
 
@@ -1170,38 +1164,48 @@ export default function AppV2() {
     }
   }
 
+  function getAiCache() {
+    try { return JSON.parse(localStorage.getItem("caltrack.v2.aicache") || "{}"); } catch { return {}; }
+  }
+  function setAiCache(key, value) {
+    try {
+      const cache = getAiCache();
+      cache[key.toLowerCase().trim()] = { value, ts: Date.now() };
+      // Keep only the 100 most recent entries
+      const entries = Object.entries(cache).sort((a, b) => b[1].ts - a[1].ts).slice(0, 100);
+      localStorage.setItem("caltrack.v2.aicache", JSON.stringify(Object.fromEntries(entries)));
+    } catch { /* storage full, skip cache */ }
+  }
+
   async function describeMealToAi() {
     if (!mealDescription.trim()) return flash("Type what you ate first.");
+    const cacheKey = mealDescription.toLowerCase().trim();
+    // Check cache first — no API call needed if we've seen this before
+    const cached = getAiCache()[cacheKey];
+    if (cached) {
+      const parsed = parseAiNutrition(cached.value);
+      setAiPhotoResult(cached.value + "\n(from cache — no API call used)");
+      setCustom((current) => ({ ...current, name: parsed.name || mealDescription.trim().slice(0, 60), servingGrams: 100, calories: parsed.calories || "", protein: parsed.protein || "", carbs: parsed.carbs || "", fat: parsed.fat || "", fiber: parsed.fiber || "", confidence: "ai" }));
+      flash("Loaded from cache — no AI quota used.");
+      return;
+    }
     setBusy(true);
     setNotice("AI is estimating your meal…");
     try {
       const response = await fetch("/api/gemini", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mode: "portion",
-          text: mealDescription.trim(),
-          daily: { totals, calorieTarget: data.profile.calorieTarget },
-        }),
+        body: JSON.stringify({ mode: "portion", text: mealDescription.trim(), daily: { totals, calorieTarget: data.profile.calorieTarget } }),
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
         throw new Error(payload.error || "AI request failed.");
       }
       const { analysis } = await response.json();
+      setAiCache(cacheKey, analysis);
       const parsed = parseAiNutrition(analysis);
       setAiPhotoResult(analysis);
-      setCustom((current) => ({
-        ...current,
-        name: parsed.name || mealDescription.trim().slice(0, 60),
-        servingGrams: 100,
-        calories: parsed.calories || "",
-        protein: parsed.protein || "",
-        carbs: parsed.carbs || "",
-        fat: parsed.fat || "",
-        fiber: parsed.fiber || "",
-        confidence: "ai",
-      }));
+      setCustom((current) => ({ ...current, name: parsed.name || mealDescription.trim().slice(0, 60), servingGrams: 100, calories: parsed.calories || "", protein: parsed.protein || "", carbs: parsed.carbs || "", fat: parsed.fat || "", fiber: parsed.fiber || "", confidence: "ai" }));
       setNotice("AI estimate ready — check and adjust the values below before saving.");
     } catch (error) {
       flash(friendlyError(error, "AI estimation failed. Try manual entry instead."));
