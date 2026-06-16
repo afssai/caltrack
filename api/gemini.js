@@ -12,8 +12,20 @@ function validText(value, max) {
   return typeof value === "string" && value.trim().length > 0 && value.length <= max;
 }
 
+const ALLOWED_ORIGINS = new Set([
+  "https://caltrack-orpin.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:4173",
+]);
+
 module.exports = async function handler(req, res) {
   setSecurityHeaders(res);
+
+  const origin = req.headers.origin || "";
+  if (!ALLOWED_ORIGINS.has(origin)) {
+    return res.status(403).json({ error: "Forbidden." });
+  }
+  res.setHeader("Access-Control-Allow-Origin", origin);
 
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed." });
