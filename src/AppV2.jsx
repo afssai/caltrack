@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Droplets, Coffee, Footprints, Dumbbell, Flame, Plus, List, Settings, CalendarDays, ScanLine, User, Activity, Waves } from "lucide-react";
 import { createWorker } from "tesseract.js";
 import {
   cacheFoodResult,
@@ -42,36 +43,15 @@ const CONFIDENCE = {
   ai: ["AI Estimate", "confidence-blue"],
 };
 
-const SVG_ICONS = {
-  walk: <path strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" d="M13 4a1 1 0 1 0 2 0 1 1 0 0 0-2 0M10.5 7.5l-2 4.5 3.5 1 1 4.5M10.5 7.5l3-.5 1.5 2.5-2 1.5M10.5 7.5l-3 2" />,
-  swim: <><circle cx="14" cy="5" r="1.2" strokeWidth="1.6"/><path strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" d="M2 15c1.5-1.5 3-2 4.5-.5s3 2 4.5.5 3-2 4.5-.5 3 2 4.5.5M7 12l3-4 3 2 2-4"/></>,
-  weights: <path strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" d="M6 8v8M4 9v6M18 8v8M20 9v6M6 12h12" />,
-  drop: <path strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" d="M12 3C12 3 6 10 6 14a6 6 0 0 0 12 0c0-4-6-11-6-11z" />,
-  coffee: <><path strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" d="M6 7h11l-1.5 9H7.5L6 7z"/><path strokeWidth="1.8" strokeLinecap="round" d="M17 9.5h2a1.5 1.5 0 0 1 0 3h-2"/><path strokeWidth="1.6" strokeLinecap="round" d="M9 4c0-1 2-1 2-2M12 4c0-1 2-1 2-2"/></>,
-  fire: <path strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" d="M12 2c0 4-4 5-4 9a4 4 0 0 0 8 0c0-2-1-3-1-3s-1 1.5-2 1.5C12 9.5 14 7 12 2zM9.5 15.5a2.5 2.5 0 0 0 5 0c0-1.5-2.5-3-2.5-3s-2.5 1.5-2.5 3z" />,
-  plus: <><line x1="12" y1="5" x2="12" y2="19" strokeWidth="2.2" strokeLinecap="round"/><line x1="5" y1="12" x2="19" y2="12" strokeWidth="2.2" strokeLinecap="round"/></>,
-  list: <><line x1="9" y1="6" x2="20" y2="6" strokeWidth="2" strokeLinecap="round"/><line x1="9" y1="12" x2="20" y2="12" strokeWidth="2" strokeLinecap="round"/><line x1="9" y1="18" x2="20" y2="18" strokeWidth="2" strokeLinecap="round"/><circle cx="4.5" cy="6" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="18" r="1" fill="currentColor"/></>,
-  chart: <polyline points="3 17 8 11 13 14 18 7 22 10" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />,
-  gear: <><circle cx="12" cy="12" r="3" strokeWidth="2"/><path strokeWidth="2" d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></>,
-  scan: <><rect x="3" y="3" width="5" height="5" rx="1" strokeWidth="2"/><rect x="16" y="3" width="5" height="5" rx="1" strokeWidth="2"/><rect x="3" y="16" width="5" height="5" rx="1" strokeWidth="2"/><path strokeWidth="2" strokeLinecap="round" d="M16 16h5v5M16 16v2M21 16v2"/><path strokeWidth="2" strokeLinecap="round" d="M12 3v3M12 9v1M3 12h3M9 12h3M12 16v5"/></>,
-  user: <><circle cx="12" cy="8" r="4" strokeWidth="2"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" strokeWidth="2" strokeLinecap="round"/></>,
-  today: <><rect x="3" y="4" width="18" height="18" rx="2" strokeWidth="2"/><line x1="16" y1="2" x2="16" y2="6" strokeWidth="2" strokeLinecap="round"/><line x1="8" y1="2" x2="8" y2="6" strokeWidth="2" strokeLinecap="round"/><line x1="3" y1="10" x2="21" y2="10" strokeWidth="2"/><circle cx="8" cy="15" r="1.2" fill="currentColor"/><circle cx="12" cy="15" r="1.2" fill="currentColor"/></>,
-  pulse: <polyline points="3 12 7 12 9 5 12 19 15 9 17 12 21 12" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>,
-};
-
-function Icon({ name, size = 22, color }) {
-  const paths = SVG_ICONS[name];
-  if (!paths) return null;
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color || "currentColor"} aria-hidden="true">
-      {paths}
-    </svg>
-  );
-}
-
 function MiniIcon({ type, size = 22 }) {
-  const map = { walk: "walk", swim: "swim", weights: "weights", water: "drop", coffee: "coffee", fire: "fire" };
-  return <Icon name={map[type] || "plus"} size={size} />;
+  const props = { size, strokeWidth: 1.8, "aria-hidden": true };
+  if (type === "walk")    return <Footprints {...props} />;
+  if (type === "swim")    return <Waves {...props} />;
+  if (type === "weights") return <Dumbbell {...props} />;
+  if (type === "water")   return <Droplets {...props} />;
+  if (type === "coffee")  return <Coffee {...props} />;
+  if (type === "fire")    return <Flame {...props} />;
+  return <Activity {...props} />;
 }
 
 function CalorieRing({ consumed, burned, target, percent }) {
@@ -1693,7 +1673,7 @@ export default function AppV2() {
             <div className="hydration-glass-card">
               <button className="glass-button" onClick={() => addWater(250)} aria-label="Add 250ml water">
                 <span className="glass" style={{ "--fill": `${hydrationPercent}%` }}>
-                  <Icon name="drop" size={20} />
+                  <Droplets size={20} strokeWidth={1.8} aria-hidden="true" />
                 </span>
                 <div>
                   <small className="vitals-label">Water</small>
@@ -1704,7 +1684,7 @@ export default function AppV2() {
             <div className="coffee-card" data-count={Math.min(coffeeCount, 6)}>
               <button className="glass-button" onClick={logCoffeeDirect} aria-label="Log coffee">
                 <span className="glass glass-coffee" style={{ "--fill": `${Math.min(100, coffeeCount * 25)}%` }}>
-                  <Icon name="coffee" size={20} />
+                  <Coffee size={20} strokeWidth={1.8} aria-hidden="true" />
                 </span>
                 <div>
                   <small className="vitals-label">Coffee</small>
@@ -2371,12 +2351,12 @@ export default function AppV2() {
 
       <nav className="bottom-nav" aria-label="Primary navigation">
         {[
-          ["diary", "Today", <Icon name="today" size={22} />],
-          ["add", "Add", <Icon name="plus" size={24} />],
-          ["tools", "Scan", <Icon name="scan" size={20} />],
-          ["log", "Log", <Icon name="list" size={20} />],
-          ["progress", "Progress", <Icon name="pulse" size={20} />],
-          ["settings", "Profile", <Icon name="user" size={20} />],
+          ["diary", "Today", <CalendarDays size={22} strokeWidth={1.8} />],
+          ["add", "Add", <Plus size={24} strokeWidth={2} />],
+          ["tools", "Scan", <ScanLine size={20} strokeWidth={1.8} />],
+          ["log", "Log", <List size={20} strokeWidth={1.8} />],
+          ["progress", "Progress", <Activity size={20} strokeWidth={1.8} />],
+          ["settings", "Profile", <User size={20} strokeWidth={1.8} />],
         ].map(([key, label, icon]) => (
           <button key={key} className={tab === key ? "active" : ""} onClick={() => setTab(key)}>
             <span className="nav-icon">{icon}</span>
