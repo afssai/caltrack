@@ -1661,10 +1661,8 @@ export default function AppV2() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <div>
-          <img src="./LOGO2.png" alt="PULSE" className="brand-logo app-logo" />
-          {tab === "diary" && <p className="top-message">{todayMessage}</p>}
-        </div>
+        <img src="./LOGO2.png" alt="PULSE" className="brand-logo app-logo" />
+        {tab === "diary" && <p className="top-message">{todayMessage}</p>}
       </header>
 
       {tab === "diary" && <section className="calorie-card">
