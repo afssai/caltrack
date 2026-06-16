@@ -1030,11 +1030,11 @@ input:focus, select:focus, textarea:focus {
 .calorie-copy > strong {
   font: 400 clamp(58px, 15vw, 92px)/.85 "Bebas Neue", sans-serif;
   letter-spacing: 2px;
-  background: linear-gradient(160deg, #fffbe8 0%, #ffd060 35%, #ffaa30 65%, #ff7c18 100%);
+  background: linear-gradient(160deg, #ffffff 0%, #c8ecff 40%, #7dd6ff 80%, #4dc3ff 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  filter: drop-shadow(0 0 20px rgba(255, 180, 30, .32));
+  filter: drop-shadow(0 0 22px rgba(77, 195, 255, .35));
 }
 .calorie-copy > strong.cal-over {
   background: linear-gradient(160deg, #ff8c42 10%, var(--accent-danger) 85%);
