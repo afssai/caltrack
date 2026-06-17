@@ -735,6 +735,7 @@ export default function AppV2() {
   const [mealDescription, setMealDescription] = useState("");
   const [aiDailyReview, setAiDailyReview] = useState("");
   const [aiReviewModal, setAiReviewModal] = useState(false);
+  const [quickWeightInput, setQuickWeightInput] = useState("");
   const [cloudSession, setCloudSession] = useState(null);
   const [syncStatus, setSyncStatus] = useState(readSyncStatus);
   const [authEmail, setAuthEmail] = useState("");
@@ -1812,9 +1813,26 @@ export default function AppV2() {
 
       {tab === "diary" && (
         <section className="weight-strip">
-          {showWeighReminder ? (
-            <button className="weigh-reminder" onClick={() => { const w = prompt("Enter today's weight (kg):"); if (!w || isNaN(Number(w))) return; const entry = { id: makeId(), date: today, weight: Number(w), waist: "" }; setData((d) => ({ ...d, measurements: [...d.measurements, entry] })); flash("Weight logged!"); }}>
-              ⚖️ {daysSinceWeigh === null ? "Log your first weight" : `${daysSinceWeigh} days since last weigh-in — tap to log`}
+          {quickWeightInput ? (
+            <div className="ws-quick-form">
+              <input type="number" step="0.1" min="20" max="300" className="ws-quick-input"
+                placeholder={latestWeight ? String(latestWeight.weight) : "e.g. 114.0"}
+                value={quickWeightInput === " " ? "" : quickWeightInput}
+                onChange={(e) => setQuickWeightInput(e.target.value)}
+                autoFocus />
+              <span className="ws-unit">kg</span>
+              <button className="primary ws-save-btn" onClick={() => {
+                const w = parseFloat(quickWeightInput);
+                if (!w || w < 20 || w > 300) return flash("Enter a valid weight (20–300 kg).");
+                setData((d) => ({ ...d, measurements: [...d.measurements, { id: makeId(), date: today, weight: w, waist: "" }] }));
+                setQuickWeightInput("");
+                flash("Weight logged!");
+              }}>Save</button>
+              <button className="secondary ws-cancel-btn" onClick={() => setQuickWeightInput("")}>✕</button>
+            </div>
+          ) : showWeighReminder ? (
+            <button className="weigh-reminder" onClick={() => setQuickWeightInput(" ")}>
+              ⚖️ {daysSinceWeigh === null ? "Log your first weight — tap here" : `${daysSinceWeigh} days since last weigh-in — tap to update`}
             </button>
           ) : (
             <div className="weight-progress-row">
@@ -1830,13 +1848,13 @@ export default function AppV2() {
                   </strong>
                 </div>
               )}
-              {data.profile.goalWeight && (
+              {data.profile.goalWeight && number(data.profile.goalWeight) > 0 && (
                 <div className="weight-stat">
                   <span className="ws-label">To goal</span>
                   <strong className="ws-val">{round(number(latestWeight.weight) - number(data.profile.goalWeight))} kg</strong>
                 </div>
               )}
-              <button className="ws-log-btn" onClick={() => { const w = prompt(`Current weight (kg) — last: ${latestWeight.weight}`); if (!w || isNaN(Number(w))) return; const entry = { id: makeId(), date: today, weight: Number(w), waist: "" }; setData((d) => ({ ...d, measurements: [...d.measurements, entry] })); flash("Weight logged!"); }}>＋ Log</button>
+              <button className="ws-log-btn" onClick={() => setQuickWeightInput(" ")}>＋ Log</button>
             </div>
           )}
         </section>
