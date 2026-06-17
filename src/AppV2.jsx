@@ -729,6 +729,7 @@ export default function AppV2() {
   const [aiPhotoResult, setAiPhotoResult] = useState("");
   const [scanPreview, setScanPreview] = useState("");
   const [pendingLogFood, setPendingLogFood] = useState(null);
+  const [scanMode, setScanMode] = useState("ai");
   const [mealDescription, setMealDescription] = useState("");
   const [aiDailyReview, setAiDailyReview] = useState("");
   const [cloudSession, setCloudSession] = useState(null);
@@ -1387,43 +1388,114 @@ export default function AppV2() {
     if (!file) return;
     if (!file.type.startsWith("image/")) return flash("Choose an image file.");
     setScanPreview(URL.createObjectURL(file));
+    setAiPhotoResult("");
+    setPendingLogFood(null);
     setBusy(true);
-    setOcrProgress(0);
-    setNotice("Reading the nutrition label locally...");
+    setNotice("Reading nutrition label with AI…");
     try {
-      let imageToScan = file;
-      if (file.size > MAX_IMAGE_BYTES) {
-        setNotice("Compressing image for OCR…");
-        imageToScan = await compressImageForOcr(file);
+      const optimized = await optimizeImage(file);
+      let imageData = optimized.dataUrl;
+      if (imageData.length > 3_000_000) {
+        const bmp = await createImageBitmap(optimized.blob);
+        const ratio = Math.min(1, 900 / Math.max(bmp.width, bmp.height));
+        const cvs = document.createElement("canvas");
+        cvs.width = Math.round(bmp.width * ratio);
+        cvs.height = Math.round(bmp.height * ratio);
+        cvs.getContext("2d").drawImage(bmp, 0, 0, cvs.width, cvs.height);
+        bmp.close?.();
+        imageData = await new Promise((res) => cvs.toBlob((b) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(b); }, "image/jpeg", 0.72));
       }
-      const worker = await createWorker("eng", 1, {
-        logger: (message) => {
-          if (message.status === "recognizing text") setOcrProgress(Math.round(message.progress * 100));
-        },
+      const response = await fetch("/api/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "nutrition-label", image: imageData }),
       });
-      const output = await worker.recognize(imageToScan);
-      await worker.terminate();
-      const parsed = parseNutritionLabel(output.data.text);
-      setOcrText(output.data.text);
-      const ocrFood = {
-        name: "Scanned nutrition label",
-        servingGrams: parsed.servingGrams,
-        calories: parsed.calories,
-        protein: parsed.protein,
-        carbs: parsed.carbs,
-        fat: parsed.fat,
-        fiber: parsed.fiber,
+      if (!response.ok) throw new Error("AI label read failed.");
+      const { analysis } = await response.json();
+      setAiPhotoResult(analysis);
+      const parsed = parseAiNutrition(analysis);
+      const labelFood = {
+        name: parsed.name || "Scanned label",
+        servingGrams: parsed.servingGrams || 100,
+        calories: parsed.calories || "",
+        protein: parsed.protein || "",
+        carbs: parsed.carbs || "",
+        fat: parsed.fat || "",
+        fiber: parsed.fiber || "",
         confidence: "ocr",
       };
-      setCustom((current) => ({ ...current, ...ocrFood }));
-      setPendingLogFood(ocrFood);
-      setNotice("OCR finished — verify the values below before saving.");
-    } catch (error) {
-      console.error(error);
-      setNotice("OCR could not read that image. Try a brighter, straight-on close-up.");
+      setCustom((c) => ({ ...c, ...labelFood }));
+      setPendingLogFood(labelFood);
+      setNotice("Label read — check the values and add to your log.");
+    } catch {
+      setNotice("AI unavailable — trying local OCR as fallback…");
+      try {
+        let imageToScan = file;
+        if (file.size > MAX_IMAGE_BYTES) imageToScan = await compressImageForOcr(file);
+        setOcrProgress(0);
+        const worker = await createWorker("eng", 1, {
+          logger: (m) => { if (m.status === "recognizing text") setOcrProgress(Math.round(m.progress * 100)); },
+        });
+        const output = await worker.recognize(imageToScan);
+        await worker.terminate();
+        const parsed = parseNutritionLabel(output.data.text);
+        setOcrText(output.data.text);
+        const ocrFood = { name: "Scanned nutrition label", servingGrams: parsed.servingGrams, calories: parsed.calories, protein: parsed.protein, carbs: parsed.carbs, fat: parsed.fat, fiber: parsed.fiber, confidence: "ocr" };
+        setCustom((c) => ({ ...c, ...ocrFood }));
+        setPendingLogFood(ocrFood);
+        setNotice("OCR done — verify every value before saving.");
+      } catch {
+        setNotice("Could not read label. Try a brighter, straight-on close-up.");
+      }
     } finally {
       setBusy(false);
     }
+  }
+
+  async function scanBarcodePhoto(file) {
+    if (!file) return;
+    setScanPreview(URL.createObjectURL(file));
+    setBusy(true);
+    setNotice("Detecting barcode…");
+    try {
+      if ("BarcodeDetector" in window) {
+        const detector = new window.BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39"] });
+        const bitmap = await createImageBitmap(file);
+        const codes = await detector.detect(bitmap);
+        bitmap.close?.();
+        if (codes.length) {
+          const code = codes[0].rawValue;
+          setBarcode(code);
+          setNotice(`Barcode ${code} detected — looking up…`);
+          await lookupBarcodeValue(code);
+          return;
+        }
+      }
+      flash("Could not auto-detect barcode. Enter the number manually below.");
+    } catch {
+      flash("Barcode scan failed. Enter the number manually.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function lookupBarcodeValue(code) {
+    const local = [...(data.customFoods || []), ...(data.pantry || [])].find(
+      (f) => f.sourceId === code || f.sourceId === `barcode:${code}`,
+    );
+    if (local) { flash("Found in your saved foods!"); setResults([{ ...local }]); return; }
+    const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`);
+    if (!response.ok) throw new Error("Lookup failed.");
+    const payload = await response.json();
+    if (payload.status !== 1) {
+      setCustom((c) => ({ ...c, sourceId: `barcode:${code}` }));
+      flash(`Barcode ${code} not found. Fill nutrition below and save — next scan finds it instantly.`);
+      setScanMode("manual");
+      return;
+    }
+    const food = openFoodFactsFood(payload.product);
+    if (!food.per100.calories) { flash("Product found but no calorie data. Enter manually."); return; }
+    setResults([food]);
   }
 
   async function analyzeFoodPhoto(file) {
@@ -2153,107 +2225,105 @@ export default function AppV2() {
 
         {tab === "tools" && (
           <section className="panel stack tools-panel">
-            <div className="tool-card scan-card">
-              <div className="section-heading">
-                <div><span className="eyebrow">Scan & estimate</span><h2><ScanLine size={18} style={{verticalAlign:"middle",marginRight:6,color:"var(--accent-good)"}} />When it is not a simple food</h2></div>
-              </div>
-              <p className="helper">Use these for packaged food, restaurant meals, nutrition labels, or unclear portions. Simple foods belong in Add.</p>
-              <div className="barcode-line">
-                <input inputMode="numeric" value={barcode} onChange={(event) => setBarcode(event.target.value)} placeholder="Enter barcode digits" />
-                <button className="primary" disabled={busy} onClick={lookupBarcode}>Look up barcode</button>
-              </div>
-              {!!results.length && <div className="result-list">
-                {results.slice(0, 6).map((food) => (
-                  <article className="result-card" key={`${food.source}-${food.id}`}>
-                    <div>
-                      <span className="source">{food.brand || food.source}</span>
-                      <strong>{cleanFoodName(food.name)}</strong>
-                      <small>{Math.round(scaleNutrition(food.per100, food.servingGrams).calories)} kcal typical serving</small>
-                    </div>
-                    <button className="primary compact" onClick={() => openLogFood(food)}>Review</button>
-                  </article>
+
+            {/* ── Scan hub ── */}
+            <div className="scan-hub">
+              <div className="scan-mode-tabs">
+                {[
+                  { id: "ai",      icon: "🤖", label: "AI Photo",  sub: "Meal estimate" },
+                  { id: "ocr",     icon: "📄", label: "OCR Label", sub: "Packaged food" },
+                  { id: "barcode", icon: "🔢", label: "Barcode",   sub: "Scan & find"  },
+                  { id: "manual",  icon: "✏️", label: "Manual",    sub: "Type it in"   },
+                ].map((m) => (
+                  <button key={m.id} className={`scan-mode-btn${scanMode === m.id ? " active" : ""}`} onClick={() => { setScanMode(m.id); setScanPreview(""); setAiPhotoResult(""); setPendingLogFood(null); setResults([]); }}>
+                    <span className="scan-mode-icon">{m.icon}</span>
+                    <span className="scan-mode-label">{m.label}</span>
+                    <span className="scan-mode-sub">{m.sub}</span>
+                  </button>
                 ))}
-              </div>}
-            </div>
+              </div>
 
-            <details className="tool-card ai-review-section tool-drawer">
-              <summary>
-                <div><span className="eyebrow violet">AI Tools</span><strong><Brain size={15} style={{verticalAlign:"middle",marginRight:5,color:"#a99cff"}} />AI estimate or day review</strong></div>
-                <button className="secondary compact" disabled={busy} onClick={getDailyAiReview}>{busy ? "Reviewing..." : "Review today"}</button>
-              </summary>
-              <div className="search-line">
-                <input
-                  value={mealDescription}
-                  onChange={(event) => setMealDescription(event.target.value)}
-                  onKeyDown={(event) => event.key === "Enter" && !busy && describeMealToAi()}
-                  placeholder="e.g. nasi lemak with egg and sambal"
-                />
-                <button className="primary" disabled={busy} onClick={describeMealToAi}>Estimate</button>
-              </div>
-              <div className="scanner-actions">
-                <label className="secondary file-button">
-                  Take food photo
-                  <input type="file" accept="image/*" capture="environment" disabled={busy} onChange={(event) => analyzeFoodPhoto(event.target.files?.[0])} />
-                </label>
-                <label className="secondary file-button">
-                  Choose photo
-                  <input type="file" accept="image/*" disabled={busy} onChange={(event) => analyzeFoodPhoto(event.target.files?.[0])} />
-                </label>
-              </div>
-              {aiPhotoResult && <details className="ai-result" open><summary><strong>AI meal estimate</strong></summary><p>{aiPhotoResult}</p></details>}
-              {aiDailyReview && <div className="ai-result"><div className="ai-result-header"><strong>AI daily review</strong><button className="text-button" onClick={() => setAiDailyReview("")}>Dismiss</button></div><p style={{ whiteSpace: "pre-wrap" }}>{aiDailyReview}</p></div>}
-            </details>
-
-            <details className="tool-card ocr-card tool-drawer">
-              <summary>
-                <div><span className="eyebrow violet">Scanner</span><strong><Camera size={15} style={{verticalAlign:"middle",marginRight:5,color:"#4dc3ff"}} />Nutrition label OCR</strong></div>
-                <span className="feature-badge">Local</span>
-              </summary>
-              <p className="helper">Take a clear, straight-on nutrition label photo or choose one from your gallery. Tesseract.js reads it locally; verify every extracted value before saving.</p>
-              <div className="scanner-actions">
-                <label className="primary file-button">
-                  Take label photo
-                  <input type="file" accept="image/*" capture="environment" onChange={(event) => scanLabel(event.target.files?.[0])} />
-                </label>
-                <label className="secondary file-button">
-                  Choose from gallery
-                  <input type="file" accept="image/*" onChange={(event) => scanLabel(event.target.files?.[0])} />
-                </label>
-              </div>
-              {scanPreview && (
-                <div className="scan-preview-wrap">
-                  <img src={scanPreview} alt="Your photo" className="scan-preview-img" />
-                  <button className="ghost-btn scan-preview-clear" onClick={() => { setScanPreview(""); setOcrText(""); setPendingLogFood(null); }}>✕ Clear</button>
+              {/* AI Photo mode */}
+              {scanMode === "ai" && (
+                <div className="scan-panel">
+                  <p className="helper">Take or upload a photo of your meal — AI estimates calories and all macros.</p>
+                  <input className="scan-hint-input" value={mealDescription} onChange={(e) => setMealDescription(e.target.value)} placeholder="Optional hint: nasi lemak, teh tarik…" />
+                  <div className="scanner-actions">
+                    <label className="primary file-button">📷 Camera<input type="file" accept="image/*" capture="environment" disabled={busy} onChange={(e) => analyzeFoodPhoto(e.target.files?.[0])} /></label>
+                    <label className="secondary file-button">🖼 Gallery<input type="file" accept="image/*" disabled={busy} onChange={(e) => analyzeFoodPhoto(e.target.files?.[0])} /></label>
+                  </div>
+                  {busy && <p className="notice-inline">{notice}</p>}
+                  {scanPreview && <div className="scan-preview-wrap"><img src={scanPreview} alt="" className="scan-preview-img" /><button className="scan-preview-clear" onClick={() => { setScanPreview(""); setAiPhotoResult(""); setPendingLogFood(null); }}>✕</button></div>}
+                  {aiPhotoResult && <details className="ai-result" open><summary><strong>AI result</strong></summary><p>{aiPhotoResult}</p></details>}
+                  {aiDailyReview && <div className="ai-result"><div className="ai-result-header"><strong>Daily review</strong><button className="text-button" onClick={() => setAiDailyReview("")}>✕</button></div><p style={{whiteSpace:"pre-wrap"}}>{aiDailyReview}</p></div>}
+                  <button className="secondary compact" style={{marginTop:4}} disabled={busy} onClick={getDailyAiReview}>{busy ? "Reviewing…" : "📊 Review today's intake"}</button>
                 </div>
               )}
-              {busy && (
-                <div className="ocr-progress" role="progressbar" aria-label="OCR progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={ocrProgress}>
-                  <div className="progress-track"><i style={{ width: `${Math.max(ocrProgress, 3)}%` }} /></div>
-                  <span>{ocrProgress}%</span>
+
+              {/* OCR Label mode */}
+              {scanMode === "ocr" && (
+                <div className="scan-panel">
+                  <p className="helper">Take a clear straight-on photo of a nutrition label — AI reads every value for you.</p>
+                  <div className="scanner-actions">
+                    <label className="primary file-button">📷 Take label photo<input type="file" accept="image/*" capture="environment" disabled={busy} onChange={(e) => scanLabel(e.target.files?.[0])} /></label>
+                    <label className="secondary file-button">🖼 Gallery<input type="file" accept="image/*" disabled={busy} onChange={(e) => scanLabel(e.target.files?.[0])} /></label>
+                  </div>
+                  {busy && <><p className="notice-inline">{notice}</p>{ocrProgress > 0 && <div className="ocr-progress"><div className="progress-track"><i style={{width:`${Math.max(ocrProgress,3)}%`}} /></div><span>{ocrProgress}%</span></div>}</>}
+                  {scanPreview && <div className="scan-preview-wrap"><img src={scanPreview} alt="" className="scan-preview-img" /><button className="scan-preview-clear" onClick={() => { setScanPreview(""); setAiPhotoResult(""); setPendingLogFood(null); }}>✕</button></div>}
+                  {aiPhotoResult && <details className="ai-result" open><summary><strong>Label contents</strong></summary><p>{aiPhotoResult}</p></details>}
                 </div>
               )}
-              {pendingLogFood && pendingLogFood.calories && (
+
+              {/* Barcode mode */}
+              {scanMode === "barcode" && (
+                <div className="scan-panel">
+                  <p className="helper">Point camera at the barcode stripes on any package, or type the number printed below them.</p>
+                  <label className="primary file-button" style={{marginBottom:10}}>📷 Scan barcode<input type="file" accept="image/*" capture="environment" disabled={busy} onChange={(e) => scanBarcodePhoto(e.target.files?.[0])} /></label>
+                  {scanPreview && <div className="scan-preview-wrap"><img src={scanPreview} alt="" className="scan-preview-img" /><button className="scan-preview-clear" onClick={() => setScanPreview("")}>✕</button></div>}
+                  <p className="scan-divider">— or type manually —</p>
+                  <div className="barcode-line">
+                    <input inputMode="numeric" value={barcode} onChange={(e) => setBarcode(e.target.value)} onKeyDown={(e) => e.key === "Enter" && lookupBarcode()} placeholder="e.g. 9556007120028" />
+                    <button className="primary" disabled={busy} onClick={lookupBarcode}>Find</button>
+                  </div>
+                  {busy && <p className="notice-inline">{notice}</p>}
+                  {!!results.length && <div className="result-list">{results.slice(0,6).map((food) => (<article className="result-card" key={`${food.source}-${food.id}`}><div><span className="source">{food.brand||food.source}</span><strong>{cleanFoodName(food.name)}</strong><small>{Math.round(scaleNutrition(food.per100,food.servingGrams).calories)} kcal</small></div><button className="primary compact" onClick={() => openLogFood(food)}>Add</button></article>))}</div>}
+                </div>
+              )}
+
+              {/* Manual mode */}
+              {scanMode === "manual" && (
+                <div className="scan-panel">
+                  <p className="helper">Can't find the food anywhere? Enter the values from the label and save for next time.</p>
+                  <div className="form-grid">
+                    <Field label="Food name" value={custom.name} onChange={(e) => updateCustom({ name: e.target.value })} />
+                    <Field label="Brand (optional)" value={custom.brand} onChange={(e) => updateCustom({ brand: e.target.value })} />
+                    <Field label="Serving size" suffix="g" type="number" min="0" value={custom.servingGrams} onChange={(e) => updateCustom({ servingGrams: e.target.value })} />
+                    <Field label="Calories" suffix="kcal" type="number" min="0" value={custom.calories} onChange={(e) => updateCustom({ calories: e.target.value })} />
+                    <Field label="Protein" suffix="g" type="number" min="0" value={custom.protein} onChange={(e) => updateCustom({ protein: e.target.value })} />
+                    <Field label="Carbs" suffix="g" type="number" min="0" value={custom.carbs} onChange={(e) => updateCustom({ carbs: e.target.value })} />
+                    <Field label="Fat" suffix="g" type="number" min="0" value={custom.fat} onChange={(e) => updateCustom({ fat: e.target.value })} />
+                    <Field label="Fiber" suffix="g" type="number" min="0" value={custom.fiber} onChange={(e) => updateCustom({ fiber: e.target.value })} />
+                  </div>
+                  <div className="scanner-actions">
+                    <button className="primary" onClick={saveCustomFood}>Save food</button>
+                    <button className="secondary" onClick={() => { if (!custom.name||!custom.calories) return flash("Enter at least name and calories."); const food={id:makeId(),name:custom.name,date:today,meal:logForm.meal,grams:number(custom.servingGrams)||100,confidence:"manual",per100:{calories:number(custom.calories),protein:number(custom.protein),carbs:number(custom.carbs),fat:number(custom.fat),fiber:number(custom.fiber)},calories:number(custom.calories),protein:number(custom.protein),carbs:number(custom.carbs),fat:number(custom.fat),fiber:number(custom.fiber)};setData((d)=>({...d,diary:{...d.diary,[today]:[...(d.diary[today]||[]),food]}}));flash(`Added to ${logForm.meal}!`); }}>Add to {logForm.meal}</button>
+                  </div>
+                </div>
+              )}
+
+              {/* shared add-to-log prompt shown in AI + OCR modes */}
+              {(scanMode === "ai" || scanMode === "ocr") && pendingLogFood && pendingLogFood.calories && (
                 <div className="add-to-log-prompt">
-                  <p><strong>Log "{pendingLogFood.name}"?</strong></p>
-                  <p className="helper">{pendingLogFood.calories} kcal · P {pendingLogFood.protein || 0}g · C {pendingLogFood.carbs || 0}g · F {pendingLogFood.fat || 0}g</p>
+                  <p><strong>Add "{pendingLogFood.name || "this food"}" to today's log?</strong></p>
+                  <p className="helper">{pendingLogFood.calories} kcal · P {pendingLogFood.protein||0}g · C {pendingLogFood.carbs||0}g · F {pendingLogFood.fat||0}g</p>
                   <div className="prompt-actions">
-                    <select value={logForm.meal} onChange={(e) => setLogForm((f) => ({ ...f, meal: e.target.value }))}>
-                      {MEALS.map((m) => <option key={m}>{m}</option>)}
-                    </select>
-                    <button className="primary" onClick={() => {
-                      const food = { id: makeId(), name: pendingLogFood.name || "Scanned food", date: today, meal: logForm.meal, grams: pendingLogFood.servingGrams || 100, confidence: pendingLogFood.confidence || "ocr", per100: { calories: pendingLogFood.calories, protein: pendingLogFood.protein || 0, carbs: pendingLogFood.carbs || 0, fat: pendingLogFood.fat || 0, fiber: pendingLogFood.fiber || 0 }, calories: pendingLogFood.calories, protein: pendingLogFood.protein || 0, carbs: pendingLogFood.carbs || 0, fat: pendingLogFood.fat || 0, fiber: pendingLogFood.fiber || 0 };
-                      setData((d) => ({ ...d, diary: { ...d.diary, [today]: [...(d.diary[today] || []), food] } }));
-                      setPendingLogFood(null);
-                      flash(`Added to ${logForm.meal}!`);
-                    }}>Yes, add to {logForm.meal}</button>
+                    <select value={logForm.meal} onChange={(e) => setLogForm((f) => ({...f,meal:e.target.value}))}>{MEALS.map((m)=><option key={m}>{m}</option>)}</select>
+                    <button className="primary" onClick={() => { const food={id:makeId(),name:pendingLogFood.name||"Scanned food",date:today,meal:logForm.meal,grams:pendingLogFood.servingGrams||100,confidence:pendingLogFood.confidence||"ai",per100:{calories:pendingLogFood.calories,protein:pendingLogFood.protein||0,carbs:pendingLogFood.carbs||0,fat:pendingLogFood.fat||0,fiber:pendingLogFood.fiber||0},calories:pendingLogFood.calories,protein:pendingLogFood.protein||0,carbs:pendingLogFood.carbs||0,fat:pendingLogFood.fat||0,fiber:pendingLogFood.fiber||0};setData((d)=>({...d,diary:{...d.diary,[today]:[...(d.diary[today]||[]),food]}}));setPendingLogFood(null);flash(`Added to ${logForm.meal}!`); }}>✓ Add to {logForm.meal}</button>
                     <button className="secondary" onClick={() => setPendingLogFood(null)}>Not now</button>
                   </div>
                 </div>
               )}
-              {ocrText && (
-                <details><summary>Extracted OCR text (for reference)</summary><pre>{ocrText}</pre></details>
-              )}
-            </details>
+            </div>
 
             <details className="tool-card package-card tool-drawer">
             <summary>
