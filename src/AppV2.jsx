@@ -1881,9 +1881,13 @@ function AppV2Inner() {
                 <button className="primary ws-save-btn" onClick={() => {
                   const w = parseFloat(quickWeightInput);
                   if (!w || w < 20 || w > 300) return flash("Enter a valid weight (20–300 kg).");
-                  setData((d) => ({ ...d, measurements: [...d.measurements, { id: makeId(), date: today, weight: w, waist: "" }] }));
+                  setData((d) => ({
+                    ...d,
+                    measurements: [...d.measurements, { id: makeId(), date: today, weight: w, waist: "" }],
+                    profile: { ...d.profile, weight: w },
+                  }));
                   setQuickWeightInput("");
-                  flash("Weight logged!");
+                  flash("Weight logged! Profile & BMI updated.");
                 }}>Save</button>
                 <button className="secondary ws-cancel-btn" onClick={() => setQuickWeightInput("")}>✕</button>
               </div>
