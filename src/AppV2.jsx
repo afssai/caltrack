@@ -677,7 +677,8 @@ function ActivityTrend({ logs }) {
   return <CalorieChart diary={activityDiary} target={60} metric="calories" label="Seven day activity minutes" />;
 }
 
-function WeightJourneyCard({ entries, highestWeight, currentWeight, goalWeight: goalW, onLog, quickInput, setQuickInput, flash: flashMsg, today, setData }) {
+function WeightJourneyCard({ entries, highestWeight, currentWeight, goalWeight: goalW, onLog, quickInput, setQuickInput, flash: flashMsg, setData }) {
+  const today = localDate();
   const firstW = number(highestWeight) || (entries[0] ? number(entries[0].weight) : null);
   const curW   = entries.length ? number(entries[entries.length - 1].weight) : (number(currentWeight) || null);
   const totalDrop = firstW && goalW ? firstW - goalW : null;
@@ -1981,7 +1982,6 @@ function AppV2Inner() {
           quickInput={quickWeightInput}
           setQuickInput={setQuickWeightInput}
           flash={flash}
-          today={today}
           setData={setData}
         />
       )}
