@@ -756,6 +756,8 @@ function AppV2Inner() {
   const [aiDailyReview, setAiDailyReview] = useState("");
   const [aiReviewModal, setAiReviewModal] = useState(false);
   const [quickWeightInput, setQuickWeightInput] = useState("");
+  const [notesSaved, setNotesSaved] = useState(false);
+  const notesSaveTimer = useRef(null);
   const [cloudSession, setCloudSession] = useState(null);
   const [syncStatus, setSyncStatus] = useState(readSyncStatus);
   const [authEmail, setAuthEmail] = useState("");
@@ -2060,7 +2062,16 @@ function AppV2Inner() {
                     );
                   })}
                 </div>
-                <textarea value={dailyLog.notes} onChange={(event) => updateDailyLog({ notes: event.target.value.slice(0, 2000) })} placeholder="Anything worth remembering today? hunger, sleep, pain, mood..." />
+                <textarea value={dailyLog.notes} onChange={(event) => {
+                  updateDailyLog({ notes: event.target.value.slice(0, 2000) });
+                  setNotesSaved(false);
+                  clearTimeout(notesSaveTimer.current);
+                  notesSaveTimer.current = setTimeout(() => setNotesSaved(true), 800);
+                }} placeholder="Anything worth remembering today? hunger, sleep, pain, mood..." />
+                <div className="notes-save-row">
+                  <span className="notes-char">{(dailyLog.notes || "").length}/2000</span>
+                  {notesSaved ? <span className="notes-saved">✓ Saved</span> : <span className="notes-autosave">Auto-saves as you type</span>}
+                </div>
               </div>
             </div>
 

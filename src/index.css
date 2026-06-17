@@ -2240,6 +2240,10 @@ input:focus, select:focus, textarea:focus {
 .ws-label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; }
 .ws-val { font-size: 16px; font-weight: 700; }
 .ws-sublabel { font-size: 11px; color: var(--text-secondary); }
+.notes-save-row { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; padding: 0 2px; }
+.notes-char { font-size: 11px; color: var(--text-secondary); }
+.notes-autosave { font-size: 11px; color: var(--text-secondary); font-style: italic; }
+.notes-saved { font-size: 11px; color: #4dc37f; font-weight: 600; }
 .ws-down { color: #4dc37f; }
 .ws-up   { color: #ff6b6b; }
 .ws-log-btn {
