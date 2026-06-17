@@ -20,7 +20,4 @@
   "rewrites": [
     { "source": "/((?!api/|.*\\..+$).*)", "destination": "/index.html" }
   ],
-  "functions": {
-    "api/gemini.js": { "maxDuration": 60 }
-  }
 }
