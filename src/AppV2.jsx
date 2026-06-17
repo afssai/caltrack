@@ -869,6 +869,30 @@ export default function AppV2() {
   }, {});
   const remaining = number(data.profile.calorieTarget) - totals.calories;
   const estimatedDeficit = Math.max(0, remaining) + activityCalories;
+
+  // Weight progress
+  const weightEntries = useMemo(
+    () => [...data.measurements].filter((m) => number(m.weight) > 0).sort((a, b) => a.date.localeCompare(b.date)),
+    [data.measurements],
+  );
+  const latestWeight = weightEntries.at(-1);
+  const prevWeight = weightEntries.at(-2);
+  const weightChange = latestWeight && prevWeight ? round(number(latestWeight.weight) - number(prevWeight.weight)) : null;
+  const daysSinceWeigh = latestWeight ? Math.floor((Date.now() - new Date(latestWeight.date).getTime()) / 86_400_000) : null;
+  const showWeighReminder = daysSinceWeigh === null || daysSinceWeigh >= 7;
+
+  // Water hint — 35 ml per kg body weight, min 2000
+  const bodyWeight = number(latestWeight?.weight || data.profile.weight) || 70;
+  const waterHint = Math.round(Math.max(2000, bodyWeight * 35) / 100) * 100;
+
+  // Safe deficit hint — 500 kcal/day ≈ 0.5 kg/week
+  const safeDeficitTarget = 500;
+  const currentDeficit = remaining + activityCalories;
+  const deficitStatus = currentDeficit >= safeDeficitTarget
+    ? "on track"
+    : currentDeficit > 0
+    ? "below target"
+    : "surplus";
   const caloriePercent = data.profile.calorieTarget
     ? Math.min(100, (totals.calories / number(data.profile.calorieTarget)) * 100)
     : 0;
@@ -1787,6 +1811,38 @@ export default function AppV2() {
       </section>}
 
       {tab === "diary" && (
+        <section className="weight-strip">
+          {showWeighReminder ? (
+            <button className="weigh-reminder" onClick={() => { const w = prompt("Enter today's weight (kg):"); if (!w || isNaN(Number(w))) return; const entry = { id: makeId(), date: today, weight: Number(w), waist: "" }; setData((d) => ({ ...d, measurements: [...d.measurements, entry] })); flash("Weight logged!"); }}>
+              ⚖️ {daysSinceWeigh === null ? "Log your first weight" : `${daysSinceWeigh} days since last weigh-in — tap to log`}
+            </button>
+          ) : (
+            <div className="weight-progress-row">
+              <div className="weight-stat">
+                <span className="ws-label">Current</span>
+                <strong className="ws-val">{latestWeight.weight} kg</strong>
+              </div>
+              {weightChange !== null && (
+                <div className="weight-stat">
+                  <span className="ws-label">Since last</span>
+                  <strong className={`ws-val ${weightChange < 0 ? "ws-down" : weightChange > 0 ? "ws-up" : ""}`}>
+                    {weightChange > 0 ? "+" : ""}{weightChange} kg
+                  </strong>
+                </div>
+              )}
+              {data.profile.goalWeight && (
+                <div className="weight-stat">
+                  <span className="ws-label">To goal</span>
+                  <strong className="ws-val">{round(number(latestWeight.weight) - number(data.profile.goalWeight))} kg</strong>
+                </div>
+              )}
+              <button className="ws-log-btn" onClick={() => { const w = prompt(`Current weight (kg) — last: ${latestWeight.weight}`); if (!w || isNaN(Number(w))) return; const entry = { id: makeId(), date: today, weight: Number(w), waist: "" }; setData((d) => ({ ...d, measurements: [...d.measurements, entry] })); flash("Weight logged!"); }}>＋ Log</button>
+            </div>
+          )}
+        </section>
+      )}
+
+      {tab === "diary" && (
         <section className="top-vitals">
           <LiquidOrb
             LIcon={Droplets}
@@ -1830,6 +1886,36 @@ export default function AppV2() {
         <Macro label="Fat" value={totals.fat} target={data.profile.fatTarget} tone="fat" />
         <Macro label="Fiber" value={totals.fiber} target={data.profile.fiberTarget} tone="fiber" />
       </section>}
+
+      {tab === "diary" && (
+        <div className="hints-strip">
+          <div className="hint-pill hint-water">
+            💧 Water goal: <strong>{waterHint} ml</strong>
+            {dailyLog.water >= waterHint
+              ? " ✓ Done!"
+              : ` — ${Math.max(0, waterHint - Math.round(dailyLog.water || 0))} ml left`}
+          </div>
+          <div className={`hint-pill hint-deficit ${deficitStatus === "on track" ? "hint-good" : deficitStatus === "surplus" ? "hint-warn" : ""}`}>
+            {deficitStatus === "on track" && "🎯 "}
+            {deficitStatus === "surplus" && "⚠️ "}
+            {deficitStatus === "below target" && "📉 "}
+            Deficit: <strong>{Math.round(currentDeficit)} kcal</strong>
+            {deficitStatus === "on track" && " — on pace for ~0.5 kg/wk"}
+            {deficitStatus === "surplus" && " — over calories today"}
+            {deficitStatus === "below target" && ` — aim for ${safeDeficitTarget} kcal`}
+          </div>
+          {remaining > 0 && (
+            <div className="hint-pill">
+              🍽️ <strong>{Math.round(remaining)} kcal</strong> left to eat safely today
+            </div>
+          )}
+          {totals.protein < number(data.profile.proteinTarget) * 0.5 && (
+            <div className="hint-pill hint-warn">
+              💪 Protein low — need {Math.round(number(data.profile.proteinTarget) - totals.protein)}g more
+            </div>
+          )}
+        </div>
+      )}
 
       {notice && <div className="notice" role="status">{notice}</div>}
       <main ref={mainRef}>
