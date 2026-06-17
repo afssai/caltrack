@@ -677,6 +677,143 @@ function ActivityTrend({ logs }) {
   return <CalorieChart diary={activityDiary} target={60} metric="calories" label="Seven day activity minutes" />;
 }
 
+function WeightJourneyCard({ entries, highestWeight, currentWeight, goalWeight: goalW, onLog, quickInput, setQuickInput, flash: flashMsg, today, setData }) {
+  const firstW = number(highestWeight) || (entries[0] ? number(entries[0].weight) : null);
+  const curW   = entries.length ? number(entries[entries.length - 1].weight) : (number(currentWeight) || null);
+  const totalDrop = firstW && goalW ? firstW - goalW : null;
+  const dropped   = firstW && curW ? round(firstW - curW) : null;
+  const toGo      = curW && goalW ? round(curW - goalW) : null;
+  const pct       = totalDrop > 0 && dropped !== null ? Math.min(100, Math.max(0, (dropped / totalDrop) * 100)) : null;
+
+  // milestone track
+  const PAD = 24, TW = 300;
+  const curX = pct !== null ? PAD + (pct / 100) * (TW - 2 * PAD) : null;
+
+  // line chart — safe even with 0 or 1 entries
+  const CW = 300, CH = 100, CPX = 14, CPY = 12;
+  const pts = entries;
+  const ws  = pts.map((e) => number(e.weight));
+  const hasChart = pts.length >= 2;
+  const rawMin = hasChart ? Math.min(...ws) : 0;
+  const rawMax = hasChart ? Math.max(...ws) : 1;
+  const yMin = goalW ? Math.min(rawMin, goalW) - 3 : rawMin - 3;
+  const yMax = rawMax + 3;
+  const yRange = Math.max(1, yMax - yMin);
+  const toX = (i) => CPX + (i / Math.max(1, pts.length - 1)) * (CW - 2 * CPX);
+  const toY = (w) => CPY + ((yMax - w) / yRange) * (CH - 2 * CPY);
+  const linePts  = hasChart ? pts.map((e, i) => `${toX(i)},${toY(number(e.weight))}`).join(" ") : "";
+  const areaPts  = hasChart ? `${toX(0)},${CH - 2} ${linePts} ${toX(pts.length - 1)},${CH - 2}` : "";
+  const goalY    = goalW && hasChart ? toY(goalW) : null;
+
+  const daysSince = entries.length ? Math.floor((Date.now() - new Date(entries[entries.length - 1].date).getTime()) / 86_400_000) : null;
+  const needsWeigh = daysSince === null || daysSince >= 7;
+
+  return (
+    <section className="wj-card">
+      <div className="wj-header">
+        <div><span className="eyebrow violet">Weight journey</span><h3><Scale size={15} style={{verticalAlign:"middle",marginRight:5,color:"var(--accent-good)"}}/>Progress to goal</h3></div>
+        <button className="secondary compact" onClick={() => setQuickInput(" ")}>＋ Log</button>
+      </div>
+
+      {quickInput !== "" && (
+        <div className="ws-quick-form">
+          <input type="number" step="0.1" min="20" max="300" className="ws-quick-input"
+            placeholder={curW ? String(curW) : "e.g. 114.0"}
+            value={quickInput.trim()}
+            onChange={(e) => setQuickInput(e.target.value)}
+            autoFocus />
+          <span className="ws-unit">kg</span>
+          <button className="primary ws-save-btn" onClick={() => {
+            const w = parseFloat(quickInput);
+            if (!w || w < 20 || w > 300) { flashMsg("Enter a valid weight (20–300 kg)."); return; }
+            setData((d) => ({
+              ...d,
+              measurements: [...d.measurements, { id: makeId(), date: today, weight: w, waist: "" }],
+              profile: { ...d.profile, weight: w },
+            }));
+            setQuickInput("");
+            flashMsg("Weight logged! BMI & profile updated.");
+          }}>Save</button>
+          <button className="secondary ws-cancel-btn" onClick={() => setQuickInput("")}>✕</button>
+        </div>
+      )}
+
+      {needsWeigh && quickInput === "" && (
+        <button className="weigh-reminder" onClick={() => setQuickInput(" ")}>
+          ⚖️ {daysSince === null ? "Log your first weight — tap here" : `${daysSince} days since last weigh-in — tap to update`}
+        </button>
+      )}
+
+      <div className="wj-stats">
+        {firstW  && <div className="wj-stat"><span>Started</span><strong>{firstW} kg</strong></div>}
+        {dropped !== null && dropped > 0 && <div className="wj-stat wj-lost"><span>Lost</span><strong>−{dropped} kg</strong></div>}
+        {curW    && <div className="wj-stat wj-cur"><span>Now</span><strong>{curW} kg</strong></div>}
+        {toGo !== null && toGo > 0 && <div className="wj-stat"><span>To goal</span><strong>{toGo} kg</strong></div>}
+      </div>
+
+      {pct !== null && curX !== null && (
+        <div className="wj-track-wrap">
+          <svg viewBox={`0 0 ${TW} 58`} className="wj-track-svg">
+            <defs>
+              <linearGradient id="wjGrad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#4dc37f" stopOpacity=".9"/>
+                <stop offset="100%" stopColor="#00c6ff" stopOpacity=".9"/>
+              </linearGradient>
+            </defs>
+            <line x1={PAD} y1="20" x2={TW-PAD} y2="20" stroke="rgba(255,255,255,.1)" strokeWidth="5" strokeLinecap="round"/>
+            <line x1={PAD} y1="20" x2={curX}    y2="20" stroke="url(#wjGrad)"          strokeWidth="5" strokeLinecap="round"/>
+            <circle cx={PAD}    cy="20" r="6" fill="#4dc37f"/>
+            <circle cx={curX}   cy="20" r="9" fill="#0a090d" stroke="#00c6ff" strokeWidth="2.5"/>
+            <circle cx={curX}   cy="20" r="4" fill="#00c6ff"/>
+            <circle cx={TW-PAD} cy="20" r="6" fill="rgba(255,255,255,.15)" stroke="rgba(255,255,255,.4)" strokeWidth="1.5"/>
+            <text x={PAD}    y="38" fontSize="10" fill="#4dc37f" fontWeight="700">{firstW} kg</text>
+            <text x={curX}   y="38" fontSize="10" fill="#00c6ff" fontWeight="700" textAnchor="middle">{curW} kg</text>
+            <text x={TW-PAD} y="38" fontSize="10" fill="rgba(255,255,255,.4)" fontWeight="700" textAnchor="end">{goalW} kg</text>
+            <text x={PAD}    y="50" fontSize="8" fill="rgba(255,255,255,.25)">Start</text>
+            <text x={curX}   y="50" fontSize="8" fill="rgba(255,255,255,.25)" textAnchor="middle">You</text>
+            <text x={TW-PAD} y="50" fontSize="8" fill="rgba(255,255,255,.25)" textAnchor="end">Goal</text>
+          </svg>
+          <div className="wj-pct">{Math.round(pct)}% of the way to your goal</div>
+        </div>
+      )}
+
+      {hasChart && (
+        <div className="wj-chart-wrap">
+          <svg viewBox={`0 0 ${CW} ${CH}`} className="wj-chart-svg">
+            <defs>
+              <linearGradient id="wjAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#00c6ff" stopOpacity=".2"/>
+                <stop offset="100%" stopColor="#00c6ff" stopOpacity="0"/>
+              </linearGradient>
+            </defs>
+            {goalY !== null && (
+              <>
+                <line x1={CPX} y1={goalY} x2={CW-CPX} y2={goalY} stroke="#4dc37f" strokeWidth="1.2" strokeDasharray="5 4" strokeOpacity=".6"/>
+                <text x={CW-CPX-2} y={goalY-3} fontSize="8" fill="#4dc37f" opacity=".8" textAnchor="end">Goal {goalW} kg</text>
+              </>
+            )}
+            <polygon points={areaPts} fill="url(#wjAreaGrad)"/>
+            <polyline points={linePts} fill="none" stroke="#00c6ff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+            {pts.map((e, i) => (
+              <circle key={e.id || i} cx={toX(i)} cy={toY(number(e.weight))} r="3" fill="#0a090d" stroke="#00c6ff" strokeWidth="1.8"/>
+            ))}
+            <text x={toX(0)}             y={toY(ws[0]) - 5}         fontSize="9" fill="rgba(255,255,255,.4)" textAnchor="middle">{ws[0]}</text>
+            <text x={toX(pts.length - 1)} y={toY(ws[ws.length-1])-5} fontSize="9" fill="#00c6ff" fontWeight="700" textAnchor="middle">{ws[ws.length-1]}</text>
+          </svg>
+          <div className="wj-chart-axis">
+            <span>{pts[0].date.slice(5)}</span>
+            <span>{pts[pts.length-1].date.slice(5)}</span>
+          </div>
+        </div>
+      )}
+
+      {!hasChart && quickInput === "" && (
+        <p className="wj-empty">Log 2+ weights to see your trend line.</p>
+      )}
+    </section>
+  );
+}
+
 function AppV2Inner() {
   const [security, setSecurity] = useState(readSecurity);
   const [locked, setLocked] = useState(true);
@@ -1835,155 +1972,19 @@ function AppV2Inner() {
         />
       </section>}
 
-      {tab === "diary" && (() => {
-        const firstW = number(data.profile.highestWeight) || (weightEntries[0] ? number(weightEntries[0].weight) : null);
-        const curW   = latestWeight ? number(latestWeight.weight) : (number(data.profile.weight) || null);
-        const goalW  = number(data.profile.goalWeight) || null;
-        const totalDrop = firstW && goalW ? firstW - goalW : null;
-        const dropped   = firstW && curW ? round(firstW - curW) : null;
-        const toGo      = curW && goalW ? round(curW - goalW) : null;
-        const pct       = totalDrop > 0 && dropped !== null ? Math.min(100, Math.max(0, (dropped / totalDrop) * 100)) : null;
-        // track x positions (SVG viewBox 0 0 300 56)
-        const PAD = 24, W = 300;
-        const startX = PAD, endX = W - PAD;
-        const curX   = pct !== null ? PAD + (pct / 100) * (W - 2 * PAD) : null;
-        // line chart — all entries
-        const chartPts = weightEntries;
-        const chartWeights = chartPts.map((e) => number(e.weight));
-        const chartMin = goalW ? Math.min(...chartWeights, goalW) - 2 : Math.min(...chartWeights) - 2;
-        const chartMax = Math.max(...chartWeights) + 2;
-        const chartRange = Math.max(1, chartMax - chartMin);
-        const CW = 300, CH = 90, CPX = 12, CPY = 10;
-        const toX = (i) => CPX + (i / Math.max(1, chartPts.length - 1)) * (CW - 2 * CPX);
-        const toY = (w) => CPY + ((chartMax - w) / chartRange) * (CH - 2 * CPY);
-        const linePts = chartPts.map((e, i) => `${toX(i)},${toY(number(e.weight))}`).join(" ");
-        const goalY   = goalW ? toY(goalW) : null;
-        const areaBot = CH - 2;
-        const areaPts = chartPts.length > 1
-          ? `${toX(0)},${areaBot} ${linePts} ${toX(chartPts.length - 1)},${areaBot}`
-          : null;
-
-        return (
-          <section className="wj-card">
-            <div className="wj-header">
-              <div><span className="eyebrow violet">Weight journey</span><h3><Scale size={15} style={{verticalAlign:"middle",marginRight:5,color:"var(--accent-good)"}} />Progress to goal</h3></div>
-              <button className="secondary compact" onClick={() => setQuickWeightInput(" ")}>＋ Log weight</button>
-            </div>
-
-            {quickWeightInput && (
-              <div className="ws-quick-form">
-                <input type="number" step="0.1" min="20" max="300" className="ws-quick-input"
-                  placeholder={latestWeight ? String(latestWeight.weight) : "e.g. 114.0"}
-                  value={quickWeightInput === " " ? "" : quickWeightInput}
-                  onChange={(e) => setQuickWeightInput(e.target.value)}
-                  autoFocus />
-                <span className="ws-unit">kg</span>
-                <button className="primary ws-save-btn" onClick={() => {
-                  const w = parseFloat(quickWeightInput);
-                  if (!w || w < 20 || w > 300) return flash("Enter a valid weight (20–300 kg).");
-                  setData((d) => ({
-                    ...d,
-                    measurements: [...d.measurements, { id: makeId(), date: today, weight: w, waist: "" }],
-                    profile: { ...d.profile, weight: w },
-                  }));
-                  setQuickWeightInput("");
-                  flash("Weight logged! Profile & BMI updated.");
-                }}>Save</button>
-                <button className="secondary ws-cancel-btn" onClick={() => setQuickWeightInput("")}>✕</button>
-              </div>
-            )}
-
-            {showWeighReminder && !quickWeightInput && (
-              <button className="weigh-reminder" onClick={() => setQuickWeightInput(" ")}>
-                ⚖️ {daysSinceWeigh === null ? "Log your first weight — tap here" : `${daysSinceWeigh} days since last weigh-in — tap to update`}
-              </button>
-            )}
-
-            {/* Stats row */}
-            <div className="wj-stats">
-              {firstW && <div className="wj-stat"><span>Started</span><strong>{firstW} kg</strong></div>}
-              {dropped !== null && <div className="wj-stat wj-lost"><span>Lost</span><strong>−{dropped} kg</strong></div>}
-              {curW && <div className="wj-stat wj-cur"><span>Now</span><strong>{curW} kg</strong></div>}
-              {toGo !== null && toGo > 0 && <div className="wj-stat"><span>To goal</span><strong>{toGo} kg</strong></div>}
-            </div>
-
-            {/* Milestone track */}
-            {pct !== null && curX !== null && (
-              <div className="wj-track-wrap">
-                <svg viewBox={`0 0 ${W} 56`} className="wj-track-svg">
-                  <defs>
-                    <linearGradient id="wjGrad" x1="0" y1="0" x2="1" y2="0">
-                      <stop offset="0%" stopColor="#4dc37f" stopOpacity=".9" />
-                      <stop offset="100%" stopColor="#00c6ff" stopOpacity=".9" />
-                    </linearGradient>
-                  </defs>
-                  {/* background rail */}
-                  <line x1={startX} y1="20" x2={endX} y2="20" stroke="rgba(255,255,255,.1)" strokeWidth="5" strokeLinecap="round" />
-                  {/* progress fill */}
-                  <line x1={startX} y1="20" x2={curX} y2="20" stroke="url(#wjGrad)" strokeWidth="5" strokeLinecap="round" />
-                  {/* start dot */}
-                  <circle cx={startX} cy="20" r="6" fill="#4dc37f" />
-                  {/* current dot */}
-                  <circle cx={curX} cy="20" r="9" fill="#0a090d" stroke="#00c6ff" strokeWidth="2.5" />
-                  <circle cx={curX} cy="20" r="4" fill="#00c6ff" />
-                  {/* goal dot */}
-                  <circle cx={endX} cy="20" r="6" fill="rgba(255,255,255,.2)" stroke="rgba(255,255,255,.4)" strokeWidth="1.5" />
-                  <text x="4" y="44" fontSize="10" fill="#4dc37f" fontWeight="700">{firstW} kg</text>
-                  <text x={curX} y="44" fontSize="10" fill="#00c6ff" fontWeight="700" textAnchor="middle">{curW} kg</text>
-                  <text x={W - 4} y="44" fontSize="10" fill="rgba(255,255,255,.45)" fontWeight="700" textAnchor="end">{goalW} kg</text>
-                  <text x="4" y="54" fontSize="8.5" fill="rgba(255,255,255,.3)">Start</text>
-                  <text x={curX} y="54" fontSize="8.5" fill="rgba(255,255,255,.3)" textAnchor="middle">You are here</text>
-                  <text x={W - 4} y="54" fontSize="8.5" fill="rgba(255,255,255,.3)" textAnchor="end">Goal</text>
-                </svg>
-                {pct !== null && (
-                  <div className="wj-pct">{Math.round(pct)}% of the way there</div>
-                )}
-              </div>
-            )}
-
-            {/* Line chart */}
-            {chartPts.length >= 2 && (
-              <div className="wj-chart-wrap">
-                <svg viewBox={`0 0 ${CW} ${CH}`} className="wj-chart-svg">
-                  <defs>
-                    <linearGradient id="wjAreaGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#00c6ff" stopOpacity=".25" />
-                      <stop offset="100%" stopColor="#00c6ff" stopOpacity="0" />
-                    </linearGradient>
-                  </defs>
-                  {/* goal dashed line */}
-                  {goalY !== null && (
-                    <>
-                      <line x1={CPX} y1={goalY} x2={CW - CPX} y2={goalY} stroke="#4dc37f" strokeWidth="1" strokeDasharray="4 3" strokeOpacity=".5" />
-                      <text x={CW - CPX + 2} y={goalY + 4} fontSize="8" fill="#4dc37f" opacity=".7">{goalW}</text>
-                    </>
-                  )}
-                  {/* area fill */}
-                  {areaPts && <polygon points={areaPts} fill="url(#wjAreaGrad)" />}
-                  {/* weight line */}
-                  <polyline points={linePts} fill="none" stroke="#00c6ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  {/* dots */}
-                  {chartPts.map((e, i) => (
-                    <circle key={e.id || i} cx={toX(i)} cy={toY(number(e.weight))} r="2.8" fill="#0a090d" stroke="#00c6ff" strokeWidth="1.5" />
-                  ))}
-                  {/* start & end weight labels */}
-                  <text x={toX(0)} y={toY(chartWeights[0]) - 5} fontSize="8.5" fill="rgba(255,255,255,.45)" textAnchor="middle">{chartWeights[0]}</text>
-                  <text x={toX(chartPts.length - 1)} y={toY(chartWeights.at(-1)) - 5} fontSize="8.5" fill="#00c6ff" fontWeight="700" textAnchor="middle">{chartWeights.at(-1)}</text>
-                </svg>
-                <div className="wj-chart-axis">
-                  <span>{weightEntries[0]?.date?.slice(5)}</span>
-                  <span style={{color:"var(--text-secondary)",fontSize:"11px"}}>All weight entries</span>
-                  <span>{weightEntries.at(-1)?.date?.slice(5)}</span>
-                </div>
-              </div>
-            )}
-
-            {chartPts.length < 2 && !quickWeightInput && (
-              <p className="wj-empty">Log at least 2 weight entries to see your trend chart.</p>
-            )}
-          </section>
-        );
-      })()}
+      {tab === "diary" && (
+        <WeightJourneyCard
+          entries={weightEntries}
+          highestWeight={data.profile.highestWeight}
+          currentWeight={data.profile.weight}
+          goalWeight={number(data.profile.goalWeight) || null}
+          quickInput={quickWeightInput}
+          setQuickInput={setQuickWeightInput}
+          flash={flash}
+          today={today}
+          setData={setData}
+        />
+      )}
 
       {tab === "diary" && (
         <section className="top-vitals">
