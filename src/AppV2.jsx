@@ -724,16 +724,21 @@ function WeightJourneyCard({ entries, highestWeight, currentWeight, goalWeight: 
             onChange={(e) => setQuickInput(e.target.value)}
             autoFocus />
           <span className="ws-unit">kg</span>
+          <input type="date" className="ws-date-input" id="wj-log-date"
+            defaultValue={today} max={today} />
           <button className="primary ws-save-btn" onClick={() => {
             const w = parseFloat(quickInput);
             if (!w || w < 20 || w > 300) { flashMsg("Enter a valid weight (20–300 kg)."); return; }
+            const dateEl = document.getElementById("wj-log-date");
+            const logDate = (dateEl && dateEl.value) ? dateEl.value : today;
+            const isToday = logDate === today;
             setData((d) => ({
               ...d,
-              measurements: [...d.measurements, { id: makeId(), date: today, weight: w, waist: "" }],
-              profile: { ...d.profile, weight: w },
+              measurements: [...d.measurements, { id: makeId(), date: logDate, weight: w, waist: "" }],
+              profile: isToday ? { ...d.profile, weight: w } : d.profile,
             }));
             setQuickInput("");
-            flashMsg("Weight logged! BMI & profile updated.");
+            flashMsg(isToday ? "Weight logged! BMI & profile updated." : `Weight logged for ${logDate}.`);
           }}>Save</button>
           <button className="secondary ws-cancel-btn" onClick={() => setQuickInput("")}>✕</button>
         </div>
