@@ -2239,6 +2239,7 @@ input:focus, select:focus, textarea:focus {
 }
 .ws-label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; }
 .ws-val { font-size: 16px; font-weight: 700; }
+.ws-sublabel { font-size: 11px; color: var(--text-secondary); }
 .ws-down { color: #4dc37f; }
 .ws-up   { color: #ff6b6b; }
 .ws-log-btn {

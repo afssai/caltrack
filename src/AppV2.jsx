@@ -1850,8 +1850,9 @@ export default function AppV2() {
               )}
               {data.profile.goalWeight && number(data.profile.goalWeight) > 0 && (
                 <div className="weight-stat">
-                  <span className="ws-label">To goal</span>
-                  <strong className="ws-val">{round(number(latestWeight.weight) - number(data.profile.goalWeight))} kg</strong>
+                  <span className="ws-label">Goal</span>
+                  <strong className="ws-val">{number(data.profile.goalWeight)} kg</strong>
+                  <span className="ws-sublabel">{round(number(latestWeight.weight) - number(data.profile.goalWeight))} kg to go</span>
                 </div>
               )}
               <button className="ws-log-btn" onClick={() => setQuickWeightInput(" ")}>＋ Log</button>
