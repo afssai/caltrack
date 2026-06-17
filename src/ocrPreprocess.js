@@ -1,15 +1,47 @@
 // OCR preprocessing pipeline — runs 100% in the browser, zero API calls.
-// Pipeline: upscale → grayscale → contrast stretch → adaptive threshold
-//           → deskew → [optional de-bow for cylindrical labels] → sharpen
+// Pipeline: upscale → best-channel grayscale → contrast stretch → adaptive threshold
+//           → auto-invert → deskew → [optional de-bow for cylindrical labels] → sharpen
 
 const TARGET_PX = 2400; // upscale target — Tesseract reads better at higher res
 
 // ─── pixel helpers ────────────────────────────────────────────────────────────
 
+// Pick the single RGB channel with the highest contrast (max-min range).
+// On colorful packaging (red bag, blue text) one channel separates text
+// from background far better than the standard luminance blend.
 function grayscale(data) {
+  // Sample every 8th pixel for speed when measuring channel ranges
+  let rLo = 255, rHi = 0, gLo = 255, gHi = 0, bLo = 255, bHi = 0;
+  for (let i = 0; i < data.length; i += 32) {
+    if (data[i]     < rLo) rLo = data[i];     if (data[i]     > rHi) rHi = data[i];
+    if (data[i + 1] < gLo) gLo = data[i + 1]; if (data[i + 1] > gHi) gHi = data[i + 1];
+    if (data[i + 2] < bLo) bLo = data[i + 2]; if (data[i + 2] > bHi) bHi = data[i + 2];
+  }
+  const rRange = rHi - rLo, gRange = gHi - gLo, bRange = bHi - bLo;
+  // If all channels are similar use luminance; otherwise use highest-contrast channel
+  const maxRange = Math.max(rRange, gRange, bRange);
+  const ch = (maxRange > 40 && maxRange > Math.min(rRange, gRange, bRange) * 1.5)
+    ? (rRange >= gRange && rRange >= bRange ? 0 : gRange >= bRange ? 1 : 2)
+    : -1; // -1 = luminance
   for (let i = 0; i < data.length; i += 4) {
-    const g = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    const g = ch === -1
+      ? 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]
+      : data[i + ch];
     data[i] = data[i + 1] = data[i + 2] = g;
+  }
+}
+
+// After binarisation, if the majority of pixels are dark the label has
+// light text on a dark/coloured background — invert so Tesseract sees
+// the dark-on-light it was trained on.
+function autoInvert(imgData) {
+  const { data } = imgData;
+  let dark = 0;
+  for (let i = 0; i < data.length; i += 4) if (data[i] < 128) dark++;
+  if (dark / (data.length / 4) > 0.5) {
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = data[i + 1] = data[i + 2] = 255 - data[i];
+    }
   }
 }
 
@@ -230,7 +262,10 @@ export async function preprocessLabel(file, cylindrical = false) {
   img = ctx.getImageData(0, 0, canvas.width, canvas.height);
   img = adaptiveThreshold(img, 41, 10);
 
-  // 6. Sharpen
+  // 6. Auto-invert — if background is dark (coloured packaging), flip to dark-on-white
+  autoInvert(img);
+
+  // 7. Sharpen
   sharpen(img.data, canvas.width, canvas.height);
 
   ctx.putImageData(img, 0, 0);
