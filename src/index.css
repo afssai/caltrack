@@ -2217,10 +2217,66 @@ input:focus, select:focus, textarea:focus {
   cursor: pointer;
 }
 
-/* ── Weight progress strip ───────────────────────────────────────────────── */
-.weight-strip {
-  padding: 0 16px 6px;
+/* ── Weight Journey Card ─────────────────────────────────────────────────── */
+.wj-card {
+  margin: 0 12px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 14px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
+.wj-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.wj-header h3 {
+  font: 700 15px "Syne";
+  margin: 2px 0 0;
+  color: var(--text);
+}
+.wj-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.wj-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--surface2);
+  border-radius: 10px;
+  padding: 8px 6px;
+  gap: 2px;
+}
+.wj-stat span { font-size: 10px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; }
+.wj-stat strong { font-size: 15px; font-weight: 700; }
+.wj-lost strong { color: #4dc37f; }
+.wj-cur strong { color: #00c6ff; }
+.wj-track-wrap { position: relative; }
+.wj-track-svg { width: 100%; display: block; overflow: visible; }
+.wj-pct {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: -4px;
+}
+.wj-chart-wrap { display: flex; flex-direction: column; gap: 4px; }
+.wj-chart-svg { width: 100%; display: block; overflow: visible; }
+.wj-chart-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-secondary);
+  padding: 0 2px;
+}
+.wj-empty { font-size: 13px; color: var(--text-secondary); text-align: center; padding: 8px 0; margin: 0; }
+
+/* kept for quick-log form reuse */
 .weigh-reminder {
   width: 100%;
   padding: 11px 14px;
@@ -2231,21 +2287,6 @@ input:focus, select:focus, textarea:focus {
   font-size: 13px;
   cursor: pointer;
   text-align: left;
-}
-.weight-progress-row {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  background: var(--surface2);
-  border-radius: 14px;
-  padding: 10px 14px;
-  gap: 14px;
-}
-.weight-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  flex: 1;
 }
 .ws-label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; }
 .ws-val { font-size: 16px; font-weight: 700; }
