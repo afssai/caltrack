@@ -2210,6 +2210,23 @@ input:focus, select:focus, textarea:focus {
   cursor: pointer;
 }
 
+/* cylindrical label toggle */
+.cylindrical-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+.cylindrical-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-good);
+  cursor: pointer;
+}
+
 /* add-to-log confirmation prompt */
 .add-to-log-prompt {
   background: rgba(77,195,255,.07);

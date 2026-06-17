@@ -3,6 +3,7 @@ import logo1Src from "./assets/LOGO1.png";
 import logo2Src from "./assets/LOGO2.png";
 import { Droplets, Coffee, Footprints, Dumbbell, Flame, Plus, List, CalendarDays, ScanLine, User, Activity, Waves, Beef, Wheat, Leaf, Droplet, Trash2, Timer, Zap, Sun, Moon, BatteryLow, Thermometer, Brain, Camera, Package, BookOpen, Scale, Image, HeartPulse, Stethoscope, ChefHat, SlidersHorizontal, Search, ClipboardList } from "lucide-react";
 import { createWorker } from "tesseract.js";
+import { preprocessLabel } from "./ocrPreprocess.js";
 import {
   cacheFoodResult,
   checkSupabaseConnection,
@@ -730,6 +731,7 @@ export default function AppV2() {
   const [scanPreview, setScanPreview] = useState("");
   const [pendingLogFood, setPendingLogFood] = useState(null);
   const [scanMode, setScanMode] = useState("ai");
+  const [cylindrical, setCylindrical] = useState(false);
   const [mealDescription, setMealDescription] = useState("");
   const [aiDailyReview, setAiDailyReview] = useState("");
   const [cloudSession, setCloudSession] = useState(null);
@@ -1391,31 +1393,21 @@ export default function AppV2() {
     setAiPhotoResult("");
     setPendingLogFood(null);
     setBusy(true);
-    setNotice("Reading nutrition label with AI…");
+    setOcrProgress(0);
+    setNotice("Preprocessing image…");
     try {
-      const optimized = await optimizeImage(file);
-      let imageData = optimized.dataUrl;
-      if (imageData.length > 3_000_000) {
-        const bmp = await createImageBitmap(optimized.blob);
-        const ratio = Math.min(1, 900 / Math.max(bmp.width, bmp.height));
-        const cvs = document.createElement("canvas");
-        cvs.width = Math.round(bmp.width * ratio);
-        cvs.height = Math.round(bmp.height * ratio);
-        cvs.getContext("2d").drawImage(bmp, 0, 0, cvs.width, cvs.height);
-        bmp.close?.();
-        imageData = await new Promise((res) => cvs.toBlob((b) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(b); }, "image/jpeg", 0.72));
-      }
-      const response = await fetch("/api/gemini", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "nutrition-label", image: imageData }),
+      const preprocessed = await preprocessLabel(file, cylindrical);
+      setNotice("Running OCR…");
+      const worker = await createWorker("eng", 1, {
+        logger: (m) => { if (m.status === "recognizing text") setOcrProgress(Math.round(m.progress * 100)); },
       });
-      if (!response.ok) throw new Error("AI label read failed.");
-      const { analysis } = await response.json();
-      setAiPhotoResult(analysis);
-      const parsed = parseAiNutrition(analysis);
-      const labelFood = {
-        name: parsed.name || "Scanned label",
+      await worker.setParameters({ tessedit_pageseg_mode: "6" });
+      const output = await worker.recognize(preprocessed);
+      await worker.terminate();
+      const parsed = parseNutritionLabel(output.data.text);
+      setOcrText(output.data.text);
+      const ocrFood = {
+        name: "Scanned nutrition label",
         servingGrams: parsed.servingGrams || 100,
         calories: parsed.calories || "",
         protein: parsed.protein || "",
@@ -1424,29 +1416,11 @@ export default function AppV2() {
         fiber: parsed.fiber || "",
         confidence: "ocr",
       };
-      setCustom((c) => ({ ...c, ...labelFood }));
-      setPendingLogFood(labelFood);
-      setNotice("Label read — check the values and add to your log.");
+      setCustom((c) => ({ ...c, ...ocrFood }));
+      setPendingLogFood(ocrFood);
+      setNotice("OCR done — verify every value before saving.");
     } catch {
-      setNotice("AI unavailable — trying local OCR as fallback…");
-      try {
-        let imageToScan = file;
-        if (file.size > MAX_IMAGE_BYTES) imageToScan = await compressImageForOcr(file);
-        setOcrProgress(0);
-        const worker = await createWorker("eng", 1, {
-          logger: (m) => { if (m.status === "recognizing text") setOcrProgress(Math.round(m.progress * 100)); },
-        });
-        const output = await worker.recognize(imageToScan);
-        await worker.terminate();
-        const parsed = parseNutritionLabel(output.data.text);
-        setOcrText(output.data.text);
-        const ocrFood = { name: "Scanned nutrition label", servingGrams: parsed.servingGrams, calories: parsed.calories, protein: parsed.protein, carbs: parsed.carbs, fat: parsed.fat, fiber: parsed.fiber, confidence: "ocr" };
-        setCustom((c) => ({ ...c, ...ocrFood }));
-        setPendingLogFood(ocrFood);
-        setNotice("OCR done — verify every value before saving.");
-      } catch {
-        setNotice("Could not read label. Try a brighter, straight-on close-up.");
-      }
+      setNotice("Could not read label. Try a brighter, straight-on close-up.");
     } finally {
       setBusy(false);
     }
@@ -2263,14 +2237,17 @@ export default function AppV2() {
               {/* OCR Label mode */}
               {scanMode === "ocr" && (
                 <div className="scan-panel">
-                  <p className="helper">Take a clear straight-on photo of a nutrition label — AI reads every value for you.</p>
+                  <p className="helper">Point camera at any nutrition label — reads locally, no internet needed.</p>
+                  <label className="cylindrical-toggle">
+                    <input type="checkbox" checked={cylindrical} onChange={(e) => setCylindrical(e.target.checked)} />
+                    <span>Cylindrical label (can / bottle)</span>
+                  </label>
                   <div className="scanner-actions">
                     <label className="primary file-button">📷 Take label photo<input type="file" accept="image/*" capture="environment" disabled={busy} onChange={(e) => scanLabel(e.target.files?.[0])} /></label>
                     <label className="secondary file-button">🖼 Gallery<input type="file" accept="image/*" disabled={busy} onChange={(e) => scanLabel(e.target.files?.[0])} /></label>
                   </div>
                   {busy && <><p className="notice-inline">{notice}</p>{ocrProgress > 0 && <div className="ocr-progress"><div className="progress-track"><i style={{width:`${Math.max(ocrProgress,3)}%`}} /></div><span>{ocrProgress}%</span></div>}</>}
                   {scanPreview && <div className="scan-preview-wrap"><img src={scanPreview} alt="" className="scan-preview-img" /><button className="scan-preview-clear" onClick={() => { setScanPreview(""); setAiPhotoResult(""); setPendingLogFood(null); }}>✕</button></div>}
-                  {aiPhotoResult && <details className="ai-result" open><summary><strong>Label contents</strong></summary><p>{aiPhotoResult}</p></details>}
                 </div>
               )}
 
