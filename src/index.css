@@ -718,6 +718,16 @@ input:focus, select:focus, textarea:focus {
 .modal .calculation { margin-top: 13px; }
 .modal-actions { display: flex; align-items: center; justify-content: space-between; gap: 11px; margin-top: 16px; }
 .modal-actions button { flex: 1; }
+.duration-dial { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.dial-option { flex: 1; min-width: 48px; padding: 10px 4px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); font-size: 15px; font-weight: 700; cursor: pointer; text-align: center; color: var(--text); transition: background .15s, border-color .15s; }
+.dial-option small { display: block; font-size: 10px; font-weight: 400; color: var(--text-secondary); }
+.dial-option:hover { border-color: var(--accent); background: rgba(0,198,255,.08); }
+.dial-active { border-color: var(--accent) !important; background: rgba(0,198,255,.15) !important; color: var(--accent); }
+.duration-custom { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.duration-custom-label { font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
+.duration-custom-input { width: 72px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 16px; font-weight: 700; text-align: center; }
+.duration-custom-unit { font-size: 13px; color: var(--text-secondary); }
+.dial-burn { font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; display: flex; align-items: center; gap: 4px; }
 
 /* Details */
 details { border: 1px solid var(--border); border-radius: 12px; padding: 11px; }

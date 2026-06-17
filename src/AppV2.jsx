@@ -690,7 +690,8 @@ function AppV2Inner() {
   const calAnimRef = useRef(null);
   useEffect(() => {
     const eaten = data.diary[date] ? data.diary[date].reduce((s, e) => s + number(e.calories), 0) : 0;
-    const target = Math.abs(Math.round(number(data.profile.calorieTarget) - eaten));
+    const burned = (data.dailyLogs[date]?.activities || []).reduce((s, a) => s + calcBurnedCalories(a.type, number(a.minutes), number(data.profile.weight)), 0);
+    const target = Math.abs(Math.round(number(data.profile.calorieTarget) - eaten + burned));
     const start = displayCalories;
     const delta = target - start;
     if (Math.abs(delta) < 1) { setDisplayCalories(target); return; }
@@ -706,7 +707,7 @@ function AppV2Inner() {
     calAnimRef.current = requestAnimationFrame(step);
     return () => { if (calAnimRef.current) cancelAnimationFrame(calAnimRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data.diary[date], data.profile.calorieTarget]);
+  }, [data.diary[date], data.profile.calorieTarget, data.dailyLogs[date]?.activities]);
 
   // GSAP slide-in animation on tab change
   useEffect(() => {
@@ -891,7 +892,8 @@ function AppV2Inner() {
     return acc;
   }, {});
   const remaining = number(data.profile.calorieTarget) - totals.calories;
-  const estimatedDeficit = Math.max(0, remaining) + activityCalories;
+  const netRemaining = remaining + activityCalories;
+  const estimatedDeficit = Math.max(0, netRemaining);
 
   // Weight progress
   const weightEntries = useMemo(
@@ -910,7 +912,7 @@ function AppV2Inner() {
 
   // Safe deficit hint — 500 kcal/day ≈ 0.5 kg/week
   const safeDeficitTarget = 500;
-  const currentDeficit = remaining + activityCalories;
+  const currentDeficit = netRemaining;
   const deficitStatus = currentDeficit >= safeDeficitTarget
     ? "on track"
     : currentDeficit > 0
@@ -1821,8 +1823,8 @@ function AppV2Inner() {
         </div>
         <div className="calorie-copy">
           <span className="eyebrow">Today's energy</span>
-          <strong className={caloriePercent >= 100 ? "cal-over" : ""}>{displayCalories}</strong>
-          <small>{remaining >= 0 ? "food calories left" : "over food target"}</small>
+          <strong className={netRemaining < 0 ? "cal-over" : ""}>{displayCalories}</strong>
+          <small>{netRemaining >= 0 ? "kcal left today" : "over target"}</small>
           <div className="calorie-equation"><span>{Math.round(totals.calories)} food</span><i /><span>{number(data.profile.calorieTarget)} plan</span>{activityCalories > 0 && <><i /><span>{activityCalories} burn</span></>}</div>
         </div>
         <CalorieRing
@@ -1945,9 +1947,9 @@ function AppV2Inner() {
             {deficitStatus === "surplus" && " — over calories today"}
             {deficitStatus === "below target" && ` — aim for ${safeDeficitTarget} kcal`}
           </div>
-          {remaining > 0 && (
+          {netRemaining > 0 && (
             <div className="hint-pill">
-              🍽️ <strong>{Math.round(remaining)} kcal</strong> left to eat safely today
+              🍽️ <strong>{Math.round(netRemaining)} kcal</strong> left to eat today{activityCalories > 0 ? ` (incl. ${activityCalories} burned)` : ""}
             </div>
           )}
           {totals.protein < number(data.profile.proteinTarget) * 0.5 && (
@@ -2760,7 +2762,7 @@ function AppV2Inner() {
             <span className="eyebrow">{activityDraft.type}</span>
             <h2 id="activity-title">How long?</h2>
             <div className="duration-dial">
-              {[10, 15, 20, 30, 45, 60, 75, 90].map((min) => (
+              {[10, 15, 20, 30, 45, 60].map((min) => (
                 <button
                   key={min}
                   className={`dial-option${number(activityDraft.minutes) === min ? " dial-active" : ""}`}
@@ -2768,9 +2770,21 @@ function AppV2Inner() {
                 >{min}<small>min</small></button>
               ))}
             </div>
+            <div className="duration-custom">
+              <label className="duration-custom-label">Or enter minutes:</label>
+              <input
+                type="number"
+                min="1"
+                max="300"
+                className="duration-custom-input"
+                value={activityDraft.minutes}
+                onChange={(e) => setActivityDraft((c) => ({ ...c, minutes: Math.max(1, Math.min(300, parseInt(e.target.value) || 1)) }))}
+              />
+              <span className="duration-custom-unit">min</span>
+            </div>
             <div className="dial-burn">
-              <i className="ph-bold ph-fire" style={{ fontSize: 18, color: "var(--accent-warm)" }} />
-              <span>~{calcBurnedCalories(activityDraft.type, number(activityDraft.minutes), number(data.profile.weight))} kcal burned</span>
+              <Flame size={16} style={{ color: "var(--accent-warm)", verticalAlign: "middle", marginRight: 4 }} />
+              <span>~{calcBurnedCalories(activityDraft.type, number(activityDraft.minutes), number(data.profile.weight))} kcal burned → adds to your calorie budget</span>
             </div>
             <div className="modal-actions">
               <button className="secondary" onClick={() => setActivityDraft(null)}>Cancel</button>
