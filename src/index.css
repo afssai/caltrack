@@ -1575,9 +1575,6 @@ input:focus, select:focus, textarea:focus {
 .compact-list {
   margin: 0 0 12px;
 }
-.today-ai-hidden {
-  display: none;
-}
 
 /* Add is for simple food. Scan owns barcode/OCR/AI/package tools. */
 .add-panel .barcode-line,
@@ -2208,6 +2205,107 @@ input:focus, select:focus, textarea:focus {
   padding: 4px 10px;
   font-size: 12px;
   cursor: pointer;
+}
+
+/* AI review fab button on diary tab */
+.ai-review-section { padding: 0 0 8px; }
+.ai-review-fab {
+  width: 100%;
+  padding: 13px 16px;
+  border-radius: 14px;
+  border: 1px dashed rgba(169,156,255,.4);
+  background: rgba(169,156,255,.06);
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: center;
+  transition: background .15s;
+}
+.ai-review-fab:hover { background: rgba(169,156,255,.12); }
+
+/* Modal */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.65);
+  z-index: 300;
+  display: flex;
+  align-items: flex-end;
+  padding: 0;
+}
+.modal-sheet {
+  width: 100%;
+  max-height: 85vh;
+  background: var(--surface);
+  border-radius: 20px 20px 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.modal-header {
+  padding: 18px 18px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: relative;
+}
+.modal-header h2 { margin: 0; font-size: 18px; }
+.modal-close {
+  position: absolute;
+  top: 14px; right: 14px;
+  background: var(--surface2);
+  border: none;
+  border-radius: 50%;
+  width: 30px; height: 30px;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 18px;
+  -webkit-overflow-scrolling: touch;
+}
+.modal-footer {
+  padding: 12px 18px 20px;
+  display: flex;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+}
+.modal-footer button { flex: 1; }
+
+/* OCR result card */
+.ocr-result-card {
+  background: var(--surface2);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-top: 10px;
+}
+.ocr-result-title {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 4px;
+}
+.ocr-raw-details {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.ocr-raw-details summary { cursor: pointer; padding: 4px 0; }
+.ocr-raw-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 11px;
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 8px;
+  margin-top: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  line-height: 1.5;
 }
 
 /* live barcode scanner */

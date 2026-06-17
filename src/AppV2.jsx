@@ -739,6 +739,7 @@ export default function AppV2() {
   const [cylindrical, setCylindrical] = useState(false);
   const [mealDescription, setMealDescription] = useState("");
   const [aiDailyReview, setAiDailyReview] = useState("");
+  const [aiReviewModal, setAiReviewModal] = useState(false);
   const [cloudSession, setCloudSession] = useState(null);
   const [syncStatus, setSyncStatus] = useState(readSyncStatus);
   const [authEmail, setAuthEmail] = useState("");
@@ -1433,32 +1434,12 @@ export default function AppV2() {
 
   async function startLiveScanner() {
     if (!("mediaDevices" in navigator)) return flash("Camera not supported on this browser.");
-    setLiveScanner(true);
-    setLiveScanMsg("Point at barcode…");
+    setLiveScanMsg("Starting camera…");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 } } });
       streamRef.current = stream;
-      if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play(); }
-    } catch { flash("Camera access denied."); setLiveScanner(false); return; }
-
-    if (!("BarcodeDetector" in window)) { setLiveScanMsg("Barcode detection not supported — use photo or manual."); return; }
-    const detector = new window.BarcodeDetector({ formats: ["ean_13","ean_8","upc_a","upc_e","code_128","code_39","qr_code"] });
-
-    const tick = async () => {
-      if (!streamRef.current || !videoRef.current) return;
-      try {
-        const codes = await detector.detect(videoRef.current);
-        if (codes.length) {
-          const code = codes[0].rawValue;
-          stopLiveScanner();
-          setBarcode(code);
-          await lookupBarcodeValue(code);
-          return;
-        }
-      } catch {}
-      scanTickRef.current = setTimeout(tick, 250);
-    };
-    scanTickRef.current = setTimeout(tick, 500);
+      setLiveScanner(true); // render the <video> element FIRST, then useEffect connects stream
+    } catch { flash("Camera access denied — allow camera in your browser settings."); }
   }
 
   function stopLiveScanner() {
@@ -1468,6 +1449,37 @@ export default function AppV2() {
     setLiveScanner(false);
     setLiveScanMsg("");
   }
+
+  // Connect stream to video element after React renders it, then start polling
+  useEffect(() => {
+    if (!liveScanner || !streamRef.current) return;
+    const video = videoRef.current;
+    if (!video) return;
+    video.srcObject = streamRef.current;
+    video.play().catch(() => {});
+    setLiveScanMsg("Point at barcode…");
+
+    if (!("BarcodeDetector" in window)) { setLiveScanMsg("Live scan not supported — type the number manually."); return; }
+    const detector = new window.BarcodeDetector({ formats: ["ean_13","ean_8","upc_a","upc_e","code_128","code_39","qr_code"] });
+    let cancelled = false;
+
+    const tick = async () => {
+      if (cancelled || !streamRef.current) return;
+      try {
+        const codes = await detector.detect(video);
+        if (codes.length) {
+          const code = codes[0].rawValue;
+          stopLiveScanner();
+          setBarcode(code);
+          lookupBarcodeValue(code);
+          return;
+        }
+      } catch {}
+      scanTickRef.current = setTimeout(tick, 250);
+    };
+    scanTickRef.current = setTimeout(tick, 400);
+    return () => { cancelled = true; };
+  }, [liveScanner]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function scanBarcodePhoto(file) {
     if (!file) return;
@@ -1656,6 +1668,7 @@ export default function AppV2() {
       }
       const { analysis } = await response.json();
       setAiDailyReview(analysis);
+      setAiReviewModal(true);
       setNotice("");
     } catch (error) {
       flash(friendlyError(error, "AI review failed. Make sure your Gemini API key is configured."));
@@ -1993,23 +2006,10 @@ export default function AppV2() {
               {coach.map((item) => <div className="coach-item" key={item.title}><strong>{item.title}</strong><p>{item.body}</p></div>)}
             </details>}
 
-            <div className="ai-review-section today-ai-hidden">
-              <div className="section-heading">
-                <div><span className="eyebrow violet">AI-powered</span><h2>Ask AI to review today</h2></div>
-                <button className="secondary compact" disabled={busy} onClick={getDailyAiReview}>
-                  {busy ? "Reviewing…" : "Review my day"}
-                </button>
-              </div>
-              {aiDailyReview && (
-                <div className="ai-result">
-                  <div className="ai-result-header">
-                    <strong>AI daily review</strong>
-                    <button className="text-button" onClick={() => setAiDailyReview("")}>Dismiss</button>
-                  </div>
-                  <p style={{ whiteSpace: "pre-wrap" }}>{aiDailyReview}</p>
-                </div>
-              )}
-              {!aiDailyReview && <p className="helper">AI will read your diary for today and suggest what to eat next to hit your targets.</p>}
+            <div className="ai-review-section">
+              <button className="ai-review-fab" disabled={busy} onClick={getDailyAiReview}>
+                {busy ? "⏳ Reviewing…" : "🤖 Review today's intake with AI"}
+              </button>
             </div>
 
           </section>
@@ -2163,7 +2163,7 @@ export default function AppV2() {
                 <p>{aiPhotoResult}</p>
               </details>
             )}
-            {pendingLogFood && pendingLogFood.calories && (
+            {pendingLogFood && (
               <div className="add-to-log-prompt">
                 <p><strong>Add "{pendingLogFood.name || "this food"}" to today's log?</strong></p>
                 <p className="helper">{pendingLogFood.calories} kcal · P {pendingLogFood.protein || 0}g · C {pendingLogFood.carbs || 0}g · F {pendingLogFood.fat || 0}g</p>
@@ -2272,8 +2272,6 @@ export default function AppV2() {
                   {busy && <p className="notice-inline">{notice}</p>}
                   {scanPreview && <div className="scan-preview-wrap"><img src={scanPreview} alt="" className="scan-preview-img" /><button className="scan-preview-clear" onClick={() => { setScanPreview(""); setAiPhotoResult(""); setPendingLogFood(null); }}>✕</button></div>}
                   {aiPhotoResult && <details className="ai-result" open><summary><strong>AI result</strong></summary><p>{aiPhotoResult}</p></details>}
-                  {aiDailyReview && <div className="ai-result"><div className="ai-result-header"><strong>Daily review</strong><button className="text-button" onClick={() => setAiDailyReview("")}>✕</button></div><p style={{whiteSpace:"pre-wrap"}}>{aiDailyReview}</p></div>}
-                  <button className="secondary compact" style={{marginTop:4}} disabled={busy} onClick={getDailyAiReview}>{busy ? "Reviewing…" : "📊 Review today's intake"}</button>
                 </div>
               )}
 
@@ -2290,7 +2288,25 @@ export default function AppV2() {
                     <label className="secondary file-button">🖼 Gallery<input type="file" accept="image/*" disabled={busy} onChange={(e) => scanLabel(e.target.files?.[0])} /></label>
                   </div>
                   {busy && <><p className="notice-inline">{notice}</p>{ocrProgress > 0 && <div className="ocr-progress"><div className="progress-track"><i style={{width:`${Math.max(ocrProgress,3)}%`}} /></div><span>{ocrProgress}%</span></div>}</>}
-                  {scanPreview && <div className="scan-preview-wrap"><img src={scanPreview} alt="" className="scan-preview-img" /><button className="scan-preview-clear" onClick={() => { setScanPreview(""); setAiPhotoResult(""); setPendingLogFood(null); }}>✕</button></div>}
+                  {scanPreview && <div className="scan-preview-wrap"><img src={scanPreview} alt="" className="scan-preview-img" /><button className="scan-preview-clear" onClick={() => { setScanPreview(""); setAiPhotoResult(""); setPendingLogFood(null); setOcrText(""); }}>✕</button></div>}
+                  {!busy && pendingLogFood && (
+                    <div className="ocr-result-card">
+                      <p className="ocr-result-title">Parsed values — edit anything wrong:</p>
+                      <div className="form-grid" style={{marginTop:8}}>
+                        <Field label="Calories" suffix="kcal" type="number" value={custom.calories} onChange={(e) => { updateCustom({ calories: e.target.value }); setPendingLogFood((f) => f ? { ...f, calories: e.target.value } : f); }} />
+                        <Field label="Protein" suffix="g" type="number" value={custom.protein} onChange={(e) => { updateCustom({ protein: e.target.value }); setPendingLogFood((f) => f ? { ...f, protein: e.target.value } : f); }} />
+                        <Field label="Carbs" suffix="g" type="number" value={custom.carbs} onChange={(e) => { updateCustom({ carbs: e.target.value }); setPendingLogFood((f) => f ? { ...f, carbs: e.target.value } : f); }} />
+                        <Field label="Fat" suffix="g" type="number" value={custom.fat} onChange={(e) => { updateCustom({ fat: e.target.value }); setPendingLogFood((f) => f ? { ...f, fat: e.target.value } : f); }} />
+                      </div>
+                    </div>
+                  )}
+                  {!busy && ocrText && (
+                    <details className="ocr-raw-details">
+                      <summary>Raw OCR text (tap to expand)</summary>
+                      <pre className="ocr-raw-text">{ocrText}</pre>
+                    </details>
+                  )}
+                  {!busy && !pendingLogFood && notice && <p className="notice-inline">{notice}</p>}
                 </div>
               )}
 
@@ -2601,6 +2617,26 @@ export default function AppV2() {
           </section>
         )}
       </main>
+
+      {/* AI Daily Review modal */}
+      {aiReviewModal && (
+        <div className="modal-backdrop" onClick={() => setAiReviewModal(false)}>
+          <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <span className="eyebrow violet">AI-powered</span>
+              <h2>Today's review</h2>
+              <button className="modal-close" onClick={() => setAiReviewModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.65 }}>{aiDailyReview}</p>
+            </div>
+            <div className="modal-footer">
+              <button className="secondary" onClick={() => { setAiReviewModal(false); getDailyAiReview(); }}>Refresh</button>
+              <button className="primary" onClick={() => setAiReviewModal(false)}>Done</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <nav className="bottom-nav" aria-label="Primary navigation">
         {[
