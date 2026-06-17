@@ -60,7 +60,6 @@ module.exports = async function handler(req, res) {
   };
   const instruction = modeInstructions[input.mode] || `Nutrition analysis mode: ${input.mode}. Context: ${String(input.text || "").slice(0, 4000)}.`;
   const parts = [{ text: instruction }];
-  const parts = [{ text: instruction }];
 
   if (input.image) {
     const [, mimeType, data] = input.image.match(/^data:(image\/[^;]+);base64,(.+)$/) || [];
