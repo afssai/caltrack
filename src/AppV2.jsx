@@ -1836,8 +1836,8 @@ function AppV2Inner() {
       </section>}
 
       {tab === "diary" && (() => {
-        const firstW = weightEntries[0] ? number(weightEntries[0].weight) : null;
-        const curW   = latestWeight ? number(latestWeight.weight) : null;
+        const firstW = number(data.profile.highestWeight) || (weightEntries[0] ? number(weightEntries[0].weight) : null);
+        const curW   = latestWeight ? number(latestWeight.weight) : (number(data.profile.weight) || null);
         const goalW  = number(data.profile.goalWeight) || null;
         const totalDrop = firstW && goalW ? firstW - goalW : null;
         const dropped   = firstW && curW ? round(firstW - curW) : null;
