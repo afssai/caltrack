@@ -2257,6 +2257,7 @@ input:focus, select:focus, textarea:focus {
 .wj-stat strong { font-size: 15px; font-weight: 700; }
 .wj-lost strong { color: #4dc37f; }
 .wj-cur strong { color: #00c6ff; }
+.wj-goal strong { color: #ffd700; }
 .wj-track-wrap { position: relative; }
 .wj-track-svg { width: 100%; display: block; overflow: visible; }
 .wj-pct {

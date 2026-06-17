@@ -754,30 +754,52 @@ function WeightJourneyCard({ entries, highestWeight, currentWeight, goalWeight: 
         {firstW  && <div className="wj-stat"><span>Started</span><strong>{firstW} kg</strong></div>}
         {dropped !== null && dropped > 0 && <div className="wj-stat wj-lost"><span>Lost</span><strong>−{dropped} kg</strong></div>}
         {curW    && <div className="wj-stat wj-cur"><span>Now</span><strong>{curW} kg</strong></div>}
-        {toGo !== null && toGo > 0 && <div className="wj-stat"><span>To goal</span><strong>{toGo} kg</strong></div>}
+        {goalW   && <div className="wj-stat wj-goal"><span>Goal</span><strong>{goalW} kg</strong></div>}
+        {toGo !== null && toGo > 0 && <div className="wj-stat"><span>To lose</span><strong>{toGo} kg</strong></div>}
       </div>
 
       {pct !== null && curX !== null && (
         <div className="wj-track-wrap">
-          <svg viewBox={`0 0 ${TW} 58`} className="wj-track-svg">
+          <svg viewBox={`0 0 ${TW} 62`} className="wj-track-svg">
             <defs>
               <linearGradient id="wjGrad" x1="0" y1="0" x2="1" y2="0">
                 <stop offset="0%" stopColor="#4dc37f" stopOpacity=".9"/>
                 <stop offset="100%" stopColor="#00c6ff" stopOpacity=".9"/>
               </linearGradient>
+              <filter id="glow">
+                <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+                <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
             </defs>
-            <line x1={PAD} y1="20" x2={TW-PAD} y2="20" stroke="rgba(255,255,255,.1)" strokeWidth="5" strokeLinecap="round"/>
-            <line x1={PAD} y1="20" x2={curX}    y2="20" stroke="url(#wjGrad)"          strokeWidth="5" strokeLinecap="round"/>
-            <circle cx={PAD}    cy="20" r="6" fill="#4dc37f"/>
-            <circle cx={curX}   cy="20" r="9" fill="#0a090d" stroke="#00c6ff" strokeWidth="2.5"/>
-            <circle cx={curX}   cy="20" r="4" fill="#00c6ff"/>
-            <circle cx={TW-PAD} cy="20" r="6" fill="rgba(255,255,255,.15)" stroke="rgba(255,255,255,.4)" strokeWidth="1.5"/>
-            <text x={PAD}    y="38" fontSize="10" fill="#4dc37f" fontWeight="700">{firstW} kg</text>
-            <text x={curX}   y="38" fontSize="10" fill="#00c6ff" fontWeight="700" textAnchor="middle">{curW} kg</text>
-            <text x={TW-PAD} y="38" fontSize="10" fill="rgba(255,255,255,.4)" fontWeight="700" textAnchor="end">{goalW} kg</text>
-            <text x={PAD}    y="50" fontSize="8" fill="rgba(255,255,255,.25)">Start</text>
-            <text x={curX}   y="50" fontSize="8" fill="rgba(255,255,255,.25)" textAnchor="middle">You</text>
-            <text x={TW-PAD} y="50" fontSize="8" fill="rgba(255,255,255,.25)" textAnchor="end">Goal</text>
+            {/* track rail */}
+            <line x1={PAD} y1="22" x2={TW-PAD} y2="22" stroke="rgba(255,255,255,.1)" strokeWidth="5" strokeLinecap="round"/>
+            <line x1={PAD} y1="22" x2={curX}    y2="22" stroke="url(#wjGrad)"          strokeWidth="5" strokeLinecap="round"/>
+            {/* milestone markers at 25 / 50 / 75 % */}
+            {[25, 50, 75].map((ms) => {
+              const mx = PAD + (ms / 100) * (TW - 2 * PAD);
+              const reached = pct >= ms;
+              return (
+                <g key={ms}>
+                  <circle cx={mx} cy="22" r="4" fill={reached ? "#ffd700" : "rgba(255,255,255,.08)"} stroke={reached ? "#ffd700" : "rgba(255,255,255,.2)"} strokeWidth="1.5" filter={reached ? "url(#glow)" : undefined}/>
+                  <text x={mx} y="36" fontSize="7" fill={reached ? "#ffd700" : "rgba(255,255,255,.2)"} textAnchor="middle">{ms}%</text>
+                </g>
+              );
+            })}
+            {/* start dot */}
+            <circle cx={PAD} cy="22" r="6" fill="#4dc37f" filter="url(#glow)"/>
+            {/* current position */}
+            <circle cx={curX} cy="22" r="9" fill="#0a090d" stroke="#00c6ff" strokeWidth="2.5" filter="url(#glow)"/>
+            <circle cx={curX} cy="22" r="4" fill="#00c6ff"/>
+            {/* goal dot — glows gold */}
+            <circle cx={TW-PAD} cy="22" r="7" fill={pct >= 100 ? "#ffd700" : "rgba(255,215,0,.08)"} stroke="#ffd700" strokeWidth="2" filter="url(#glow)"/>
+            <text cx={TW-PAD} cy="22" fontSize="9" fill="#ffd700" textAnchor="middle" dominantBaseline="central" x={TW-PAD} y="22">🏆</text>
+            {/* labels */}
+            <text x={PAD}    y="42" fontSize="10" fill="#4dc37f" fontWeight="700">{firstW} kg</text>
+            <text x={curX}   y="42" fontSize="10" fill="#00c6ff" fontWeight="700" textAnchor="middle">{curW} kg</text>
+            <text x={TW-PAD} y="42" fontSize="10" fill="#ffd700" fontWeight="700" textAnchor="end">{goalW} kg</text>
+            <text x={PAD}    y="53" fontSize="8" fill="rgba(255,255,255,.3)">Start</text>
+            <text x={curX}   y="53" fontSize="8" fill="rgba(255,255,255,.3)" textAnchor="middle">You</text>
+            <text x={TW-PAD} y="53" fontSize="8" fill="#ffd700" opacity=".8" textAnchor="end">Goal</text>
           </svg>
           <div className="wj-pct">{Math.round(pct)}% of the way to your goal</div>
         </div>
@@ -806,11 +828,28 @@ function WeightJourneyCard({ entries, highestWeight, currentWeight, goalWeight: 
             )}
             <polygon points={areaPts} fill="url(#wjAreaGrad)"/>
             <polyline points={linePts} fill="none" stroke="#00c6ff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-            {pts.map((e, i) => (
-              <circle key={e.id || i} cx={toX(i)} cy={toY(number(e.weight))} r="3" fill="#0a090d" stroke="#00c6ff" strokeWidth="1.8"/>
-            ))}
-            <text x={toX(0)}             y={toY(ws[0]) - 5}         fontSize="9" fill="rgba(255,255,255,.4)" textAnchor="middle">{ws[0]}</text>
-            <text x={toX(pts.length - 1)} y={toY(ws[ws.length-1])-5} fontSize="9" fill="#00c6ff" fontWeight="700" textAnchor="middle">{ws[ws.length-1]}</text>
+            {pts.map((e, i) => {
+              const cx = toX(i);
+              const cy = toY(number(e.weight));
+              const isLast = i === pts.length - 1;
+              const isFirst = i === 0;
+              const labelY = cy - 6;
+              const dateLabel = e.date ? e.date.slice(5).replace("-", "/") : "";
+              return (
+                <g key={e.id || i}>
+                  {isLast ? (
+                    <>
+                      <circle cx={cx} cy={cy} r="6" fill="#0a090d" stroke="#00c6ff" strokeWidth="2.2" filter="url(#glow)"/>
+                      <circle cx={cx} cy={cy} r="3" fill="#00c6ff"/>
+                    </>
+                  ) : (
+                    <circle cx={cx} cy={cy} r="3" fill="#0a090d" stroke={isFirst ? "#4dc37f" : "rgba(0,198,255,.5)"} strokeWidth="1.5"/>
+                  )}
+                  <text x={cx} y={labelY} fontSize="8" fill={isLast ? "#00c6ff" : "rgba(255,255,255,.45)"} fontWeight={isLast ? "700" : "400"} textAnchor="middle">{number(e.weight)}</text>
+                  <text x={cx} y={cy + 14} fontSize="7" fill="rgba(255,255,255,.3)" textAnchor="middle">{dateLabel}</text>
+                </g>
+              );
+            })}
           </svg>
           <div className="wj-chart-axis">
             <span>{pts[0].date.slice(5)}</span>
