@@ -878,7 +878,7 @@ export default function AppV2() {
   );
   const latestWeight = weightEntries.at(-1);
   const prevWeight = weightEntries.at(-2);
-  const weightChange = latestWeight && prevWeight ? round(number(latestWeight.weight) - number(prevWeight.weight)) : null;
+  const stripWeightChange = latestWeight && prevWeight ? round(number(latestWeight.weight) - number(prevWeight.weight)) : null;
   const daysSinceWeigh = latestWeight ? Math.floor((Date.now() - new Date(latestWeight.date).getTime()) / 86_400_000) : null;
   const showWeighReminder = daysSinceWeigh === null || daysSinceWeigh >= 7;
 
@@ -1840,11 +1840,11 @@ export default function AppV2() {
                 <span className="ws-label">Current</span>
                 <strong className="ws-val">{latestWeight.weight} kg</strong>
               </div>
-              {weightChange !== null && (
+              {stripWeightChange !== null && (
                 <div className="weight-stat">
                   <span className="ws-label">Since last</span>
-                  <strong className={`ws-val ${weightChange < 0 ? "ws-down" : weightChange > 0 ? "ws-up" : ""}`}>
-                    {weightChange > 0 ? "+" : ""}{weightChange} kg
+                  <strong className={`ws-val ${stripWeightChange < 0 ? "ws-down" : stripWeightChange > 0 ? "ws-up" : ""}`}>
+                    {stripWeightChange > 0 ? "+" : ""}{stripWeightChange} kg
                   </strong>
                 </div>
               )}
