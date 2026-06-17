@@ -46,6 +46,25 @@ const CONFIDENCE = {
   ai: ["AI Estimate", "confidence-blue"],
 };
 
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: "2rem", textAlign: "center", fontFamily: "sans-serif" }}>
+          <h2 style={{ marginBottom: "1rem" }}>Something went wrong</h2>
+          <p style={{ color: "#888", marginBottom: "1.5rem", fontSize: "0.9rem" }}>{String(this.state.error)}</p>
+          <button onClick={() => window.location.reload()} style={{ padding: "0.75rem 1.5rem", background: "#FF4500", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", fontSize: "1rem" }}>
+            Reload app
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function MiniIcon({ type, size = 22 }) {
   const props = { size, strokeWidth: 1.8, "aria-hidden": true };
   if (type === "walk" || type === "walking")   return <Footprints {...props} />;
@@ -248,13 +267,14 @@ function totalsFor(items = []) {
 }
 
 function scaleNutrition(per100, grams) {
+  const p = per100 || {};
   const factor = number(grams) / 100;
   return {
-    calories: round(number(per100.calories) * factor),
-    protein: round(number(per100.protein) * factor),
-    carbs: round(number(per100.carbs) * factor),
-    fat: round(number(per100.fat) * factor),
-    fiber: round(number(per100.fiber) * factor),
+    calories: round(number(p.calories) * factor),
+    protein: round(number(p.protein) * factor),
+    carbs: round(number(p.carbs) * factor),
+    fat: round(number(p.fat) * factor),
+    fiber: round(number(p.fiber) * factor),
   };
 }
 
@@ -657,7 +677,7 @@ function ActivityTrend({ logs }) {
   return <CalorieChart diary={activityDiary} target={60} metric="calories" label="Seven day activity minutes" />;
 }
 
-export default function AppV2() {
+function AppV2Inner() {
   const [security, setSecurity] = useState(readSecurity);
   const [locked, setLocked] = useState(true);
   const [data, setData] = useState(loadData);
@@ -2750,4 +2770,8 @@ export default function AppV2() {
       )}
     </div>
   );
+}
+
+export default function AppV2() {
+  return <ErrorBoundary><AppV2Inner /></ErrorBoundary>;
 }
