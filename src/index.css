@@ -2150,3 +2150,53 @@ input:focus, select:focus, textarea:focus {
     box-shadow: -1px 0 0 rgba(255,255,255,.04), 1px 0 0 rgba(255,255,255,.04);
   }
 }
+
+/* scan photo preview */
+.scan-preview-wrap {
+  position: relative;
+  margin: 10px 0;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.1);
+}
+.scan-preview-img {
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  display: block;
+}
+.scan-preview-clear {
+  position: absolute;
+  top: 8px; right: 8px;
+  background: rgba(0,0,0,.6);
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* add-to-log confirmation prompt */
+.add-to-log-prompt {
+  background: rgba(77,195,255,.07);
+  border: 1px solid rgba(77,195,255,.25);
+  border-radius: 14px;
+  padding: 14px;
+  margin: 10px 0;
+  display: grid;
+  gap: 8px;
+}
+.add-to-log-prompt p { margin: 0; }
+.prompt-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.prompt-actions select {
+  flex: 1;
+  min-width: 100px;
+}
+.prompt-actions .primary { flex: 2; }
+.prompt-actions .secondary { flex: 1; }

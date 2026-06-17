@@ -727,6 +727,8 @@ export default function AppV2() {
   const [ocrText, setOcrText] = useState("");
   const [ocrProgress, setOcrProgress] = useState(0);
   const [aiPhotoResult, setAiPhotoResult] = useState("");
+  const [scanPreview, setScanPreview] = useState("");
+  const [pendingLogFood, setPendingLogFood] = useState(null);
   const [mealDescription, setMealDescription] = useState("");
   const [aiDailyReview, setAiDailyReview] = useState("");
   const [cloudSession, setCloudSession] = useState(null);
@@ -1384,6 +1386,7 @@ export default function AppV2() {
   async function scanLabel(file) {
     if (!file) return;
     if (!file.type.startsWith("image/")) return flash("Choose an image file.");
+    setScanPreview(URL.createObjectURL(file));
     setBusy(true);
     setOcrProgress(0);
     setNotice("Reading the nutrition label locally...");
@@ -1402,9 +1405,8 @@ export default function AppV2() {
       await worker.terminate();
       const parsed = parseNutritionLabel(output.data.text);
       setOcrText(output.data.text);
-      setCustom((current) => ({
-        ...current,
-        name: current.name || "Scanned nutrition label",
+      const ocrFood = {
+        name: "Scanned nutrition label",
         servingGrams: parsed.servingGrams,
         calories: parsed.calories,
         protein: parsed.protein,
@@ -1412,8 +1414,10 @@ export default function AppV2() {
         fat: parsed.fat,
         fiber: parsed.fiber,
         confidence: "ocr",
-      }));
-      setNotice("OCR finished. Verify every value against the label before saving.");
+      };
+      setCustom((current) => ({ ...current, ...ocrFood }));
+      setPendingLogFood(ocrFood);
+      setNotice("OCR finished — verify the values below before saving.");
     } catch (error) {
       console.error(error);
       setNotice("OCR could not read that image. Try a brighter, straight-on close-up.");
@@ -1425,6 +1429,7 @@ export default function AppV2() {
   async function analyzeFoodPhoto(file) {
     if (!file) return;
     if (!file.type.startsWith("image/")) return flash("Choose an image file.");
+    setScanPreview(URL.createObjectURL(file));
     setBusy(true);
     setNotice("Analysing your food photo with AI…");
     try {
@@ -1458,9 +1463,8 @@ export default function AppV2() {
       const { analysis } = await response.json();
       const parsed = parseAiNutrition(analysis);
       setAiPhotoResult(analysis);
-      setCustom((current) => ({
-        ...current,
-        name: parsed.name,
+      const aiFood = {
+        name: parsed.name || mealDescription.trim() || "AI meal estimate",
         servingGrams: 100,
         calories: parsed.calories || "",
         protein: parsed.protein || "",
@@ -1468,8 +1472,10 @@ export default function AppV2() {
         fat: parsed.fat || "",
         fiber: parsed.fiber || "",
         confidence: "ai",
-      }));
-      setNotice("AI estimate ready — verify every value before saving.");
+      };
+      setCustom((current) => ({ ...current, ...aiFood }));
+      setPendingLogFood(aiFood);
+      setNotice("AI estimate ready — check values below, then add to your log.");
     } catch (error) {
       flash(friendlyError(error, "Photo analysis failed. Try manual entry instead."));
     } finally {
@@ -2056,11 +2062,35 @@ export default function AppV2() {
                 <input type="file" accept="image/*" disabled={busy} onChange={(event) => analyzeFoodPhoto(event.target.files?.[0])} />
               </label>
             </div>
+            {scanPreview && (
+              <div className="scan-preview-wrap">
+                <img src={scanPreview} alt="Your photo" className="scan-preview-img" />
+                <button className="ghost-btn scan-preview-clear" onClick={() => { setScanPreview(""); setAiPhotoResult(""); setPendingLogFood(null); }}>✕ Clear</button>
+              </div>
+            )}
             {aiPhotoResult && (
-              <details className="ai-result">
-                <summary><strong>AI analysis result</strong> — values pre-filled in Custom entry below</summary>
+              <details className="ai-result" open>
+                <summary><strong>AI analysis result</strong></summary>
                 <p>{aiPhotoResult}</p>
               </details>
+            )}
+            {pendingLogFood && pendingLogFood.calories && (
+              <div className="add-to-log-prompt">
+                <p><strong>Add "{pendingLogFood.name || "this food"}" to today's log?</strong></p>
+                <p className="helper">{pendingLogFood.calories} kcal · P {pendingLogFood.protein || 0}g · C {pendingLogFood.carbs || 0}g · F {pendingLogFood.fat || 0}g</p>
+                <div className="prompt-actions">
+                  <select value={logForm.meal} onChange={(e) => setLogForm((f) => ({ ...f, meal: e.target.value }))}>
+                    {MEALS.map((m) => <option key={m}>{m}</option>)}
+                  </select>
+                  <button className="primary" onClick={() => {
+                    const food = { id: makeId(), name: pendingLogFood.name || "Scanned food", date: today, meal: logForm.meal, grams: pendingLogFood.servingGrams || 100, confidence: pendingLogFood.confidence || "ai", per100: { calories: pendingLogFood.calories, protein: pendingLogFood.protein || 0, carbs: pendingLogFood.carbs || 0, fat: pendingLogFood.fat || 0, fiber: pendingLogFood.fiber || 0 }, calories: pendingLogFood.calories, protein: pendingLogFood.protein || 0, carbs: pendingLogFood.carbs || 0, fat: pendingLogFood.fat || 0, fiber: pendingLogFood.fiber || 0 };
+                    setData((d) => ({ ...d, diary: { ...d.diary, [today]: [...(d.diary[today] || []), food] } }));
+                    setPendingLogFood(null);
+                    flash(`Added to ${logForm.meal}!`);
+                  }}>Yes, add to {logForm.meal}</button>
+                  <button className="secondary" onClick={() => setPendingLogFood(null)}>Not now</button>
+                </div>
+              </div>
             )}
 
             {!!results.length && <div className="result-list">
@@ -2190,18 +2220,38 @@ export default function AppV2() {
                   <input type="file" accept="image/*" onChange={(event) => scanLabel(event.target.files?.[0])} />
                 </label>
               </div>
-              <p className="fallback-note">If camera access is unavailable or blocked, use Choose from gallery.</p>
+              {scanPreview && (
+                <div className="scan-preview-wrap">
+                  <img src={scanPreview} alt="Your photo" className="scan-preview-img" />
+                  <button className="ghost-btn scan-preview-clear" onClick={() => { setScanPreview(""); setOcrText(""); setPendingLogFood(null); }}>✕ Clear</button>
+                </div>
+              )}
               {busy && (
                 <div className="ocr-progress" role="progressbar" aria-label="OCR progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={ocrProgress}>
                   <div className="progress-track"><i style={{ width: `${Math.max(ocrProgress, 3)}%` }} /></div>
                   <span>{ocrProgress}%</span>
                 </div>
               )}
+              {pendingLogFood && pendingLogFood.calories && (
+                <div className="add-to-log-prompt">
+                  <p><strong>Log "{pendingLogFood.name}"?</strong></p>
+                  <p className="helper">{pendingLogFood.calories} kcal · P {pendingLogFood.protein || 0}g · C {pendingLogFood.carbs || 0}g · F {pendingLogFood.fat || 0}g</p>
+                  <div className="prompt-actions">
+                    <select value={logForm.meal} onChange={(e) => setLogForm((f) => ({ ...f, meal: e.target.value }))}>
+                      {MEALS.map((m) => <option key={m}>{m}</option>)}
+                    </select>
+                    <button className="primary" onClick={() => {
+                      const food = { id: makeId(), name: pendingLogFood.name || "Scanned food", date: today, meal: logForm.meal, grams: pendingLogFood.servingGrams || 100, confidence: pendingLogFood.confidence || "ocr", per100: { calories: pendingLogFood.calories, protein: pendingLogFood.protein || 0, carbs: pendingLogFood.carbs || 0, fat: pendingLogFood.fat || 0, fiber: pendingLogFood.fiber || 0 }, calories: pendingLogFood.calories, protein: pendingLogFood.protein || 0, carbs: pendingLogFood.carbs || 0, fat: pendingLogFood.fat || 0, fiber: pendingLogFood.fiber || 0 };
+                      setData((d) => ({ ...d, diary: { ...d.diary, [today]: [...(d.diary[today] || []), food] } }));
+                      setPendingLogFood(null);
+                      flash(`Added to ${logForm.meal}!`);
+                    }}>Yes, add to {logForm.meal}</button>
+                    <button className="secondary" onClick={() => setPendingLogFood(null)}>Not now</button>
+                  </div>
+                </div>
+              )}
               {ocrText && (
-                <>
-                  <button className="secondary" onClick={() => setTab("add")}>Review extracted nutrition</button>
-                  <details open><summary>Extracted OCR text</summary><pre>{ocrText}</pre></details>
-                </>
+                <details><summary>Extracted OCR text (for reference)</summary><pre>{ocrText}</pre></details>
               )}
             </details>
 
