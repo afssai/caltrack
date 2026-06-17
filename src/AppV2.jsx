@@ -690,21 +690,21 @@ function WeightJourneyCard({ entries, highestWeight, currentWeight, goalWeight: 
   const PAD = 24, TW = 300;
   const curX = pct !== null ? PAD + (pct / 100) * (TW - 2 * PAD) : null;
 
-  // line chart — safe even with 0 or 1 entries
-  const CW = 300, CH = 100, CPX = 14, CPY = 12;
+  // line chart — Y axis pinned from firstW (top) to goalW (bottom) so line descends through the full range
+  const CW = 300, CH = 110, CPX = 14, CPY = 14;
   const pts = entries;
   const ws  = pts.map((e) => number(e.weight));
   const hasChart = pts.length >= 2;
-  const rawMin = hasChart ? Math.min(...ws) : 0;
-  const rawMax = hasChart ? Math.max(...ws) : 1;
-  const yMin = goalW ? Math.min(rawMin, goalW) - 3 : rawMin - 3;
-  const yMax = rawMax + 3;
+  // pin Y axis to journey range (start → goal), fallback to measured range
+  const yMax = firstW ? firstW + 2 : (hasChart ? Math.max(...ws) + 3 : 130);
+  const yMin = goalW  ? goalW  - 2 : (hasChart ? Math.min(...ws) - 3 : 85);
   const yRange = Math.max(1, yMax - yMin);
   const toX = (i) => CPX + (i / Math.max(1, pts.length - 1)) * (CW - 2 * CPX);
   const toY = (w) => CPY + ((yMax - w) / yRange) * (CH - 2 * CPY);
   const linePts  = hasChart ? pts.map((e, i) => `${toX(i)},${toY(number(e.weight))}`).join(" ") : "";
   const areaPts  = hasChart ? `${toX(0)},${CH - 2} ${linePts} ${toX(pts.length - 1)},${CH - 2}` : "";
-  const goalY    = goalW && hasChart ? toY(goalW) : null;
+  const goalY    = goalW ? toY(goalW) : null;
+  const startY   = firstW ? toY(firstW) : null;
 
   const daysSince = entries.length ? Math.floor((Date.now() - new Date(entries[entries.length - 1].date).getTime()) / 86_400_000) : null;
   const needsWeigh = daysSince === null || daysSince >= 7;
@@ -787,6 +787,12 @@ function WeightJourneyCard({ entries, highestWeight, currentWeight, goalWeight: 
                 <stop offset="100%" stopColor="#00c6ff" stopOpacity="0"/>
               </linearGradient>
             </defs>
+            {startY !== null && (
+              <>
+                <line x1={CPX} y1={startY} x2={CW-CPX} y2={startY} stroke="#ff7043" strokeWidth="1.2" strokeDasharray="5 4" strokeOpacity=".6"/>
+                <text x={CPX+2} y={startY+9} fontSize="8" fill="#ff7043" opacity=".8">Start {firstW} kg</text>
+              </>
+            )}
             {goalY !== null && (
               <>
                 <line x1={CPX} y1={goalY} x2={CW-CPX} y2={goalY} stroke="#4dc37f" strokeWidth="1.2" strokeDasharray="5 4" strokeOpacity=".6"/>
