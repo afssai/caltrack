@@ -664,6 +664,11 @@ export default function AppV2() {
   const [date, setDate] = useState(localDate);
   const [tab, setTab] = useState("diary");
   const mainRef = useRef(null);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const scanTickRef = useRef(null);
+  const [liveScanner, setLiveScanner] = useState(false);
+  const [liveScanMsg, setLiveScanMsg] = useState("");
 
   // Animated calorie counter
   const [displayCalories, setDisplayCalories] = useState(0);
@@ -1401,7 +1406,7 @@ export default function AppV2() {
       const worker = await createWorker("eng", 1, {
         logger: (m) => { if (m.status === "recognizing text") setOcrProgress(Math.round(m.progress * 100)); },
       });
-      await worker.setParameters({ tessedit_pageseg_mode: "6" });
+      await worker.setParameters({ tessedit_pageseg_mode: "11" });
       const output = await worker.recognize(preprocessed);
       await worker.terminate();
       const parsed = parseNutritionLabel(output.data.text);
@@ -1424,6 +1429,44 @@ export default function AppV2() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function startLiveScanner() {
+    if (!("mediaDevices" in navigator)) return flash("Camera not supported on this browser.");
+    setLiveScanner(true);
+    setLiveScanMsg("Point at barcode…");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 } } });
+      streamRef.current = stream;
+      if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play(); }
+    } catch { flash("Camera access denied."); setLiveScanner(false); return; }
+
+    if (!("BarcodeDetector" in window)) { setLiveScanMsg("Barcode detection not supported — use photo or manual."); return; }
+    const detector = new window.BarcodeDetector({ formats: ["ean_13","ean_8","upc_a","upc_e","code_128","code_39","qr_code"] });
+
+    const tick = async () => {
+      if (!streamRef.current || !videoRef.current) return;
+      try {
+        const codes = await detector.detect(videoRef.current);
+        if (codes.length) {
+          const code = codes[0].rawValue;
+          stopLiveScanner();
+          setBarcode(code);
+          await lookupBarcodeValue(code);
+          return;
+        }
+      } catch {}
+      scanTickRef.current = setTimeout(tick, 250);
+    };
+    scanTickRef.current = setTimeout(tick, 500);
+  }
+
+  function stopLiveScanner() {
+    clearTimeout(scanTickRef.current);
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setLiveScanner(false);
+    setLiveScanMsg("");
   }
 
   async function scanBarcodePhoto(file) {
@@ -2209,7 +2252,7 @@ export default function AppV2() {
                   { id: "barcode", icon: "🔢", label: "Barcode",   sub: "Scan & find"  },
                   { id: "manual",  icon: "✏️", label: "Manual",    sub: "Type it in"   },
                 ].map((m) => (
-                  <button key={m.id} className={`scan-mode-btn${scanMode === m.id ? " active" : ""}`} onClick={() => { setScanMode(m.id); setScanPreview(""); setAiPhotoResult(""); setPendingLogFood(null); setResults([]); }}>
+                  <button key={m.id} className={`scan-mode-btn${scanMode === m.id ? " active" : ""}`} onClick={() => { if (liveScanner) stopLiveScanner(); setScanMode(m.id); setScanPreview(""); setAiPhotoResult(""); setPendingLogFood(null); setResults([]); }}>
                     <span className="scan-mode-icon">{m.icon}</span>
                     <span className="scan-mode-label">{m.label}</span>
                     <span className="scan-mode-sub">{m.sub}</span>
@@ -2254,16 +2297,28 @@ export default function AppV2() {
               {/* Barcode mode */}
               {scanMode === "barcode" && (
                 <div className="scan-panel">
-                  <p className="helper">Point camera at the barcode stripes on any package, or type the number printed below them.</p>
-                  <label className="primary file-button" style={{marginBottom:10}}>📷 Scan barcode<input type="file" accept="image/*" capture="environment" disabled={busy} onChange={(e) => scanBarcodePhoto(e.target.files?.[0])} /></label>
-                  {scanPreview && <div className="scan-preview-wrap"><img src={scanPreview} alt="" className="scan-preview-img" /><button className="scan-preview-clear" onClick={() => setScanPreview("")}>✕</button></div>}
-                  <p className="scan-divider">— or type manually —</p>
-                  <div className="barcode-line">
-                    <input inputMode="numeric" value={barcode} onChange={(e) => setBarcode(e.target.value)} onKeyDown={(e) => e.key === "Enter" && lookupBarcode()} placeholder="e.g. 9556007120028" />
-                    <button className="primary" disabled={busy} onClick={lookupBarcode}>Find</button>
-                  </div>
-                  {busy && <p className="notice-inline">{notice}</p>}
-                  {!!results.length && <div className="result-list">{results.slice(0,6).map((food) => (<article className="result-card" key={`${food.source}-${food.id}`}><div><span className="source">{food.brand||food.source}</span><strong>{cleanFoodName(food.name)}</strong><small>{Math.round(scaleNutrition(food.per100,food.servingGrams).calories)} kcal</small></div><button className="primary compact" onClick={() => openLogFood(food)}>Add</button></article>))}</div>}
+                  {liveScanner ? (
+                    <div className="live-scanner-wrap">
+                      <video ref={videoRef} className="live-scanner-video" playsInline muted autoPlay />
+                      <div className="live-scanner-overlay">
+                        <div className="live-scanner-box" />
+                        <p className="live-scanner-msg">{liveScanMsg}</p>
+                      </div>
+                      <button className="live-scanner-close" onClick={stopLiveScanner}>✕ Cancel</button>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="helper">Scan the barcode directly with your camera, or type the number below.</p>
+                      <button className="primary live-scan-btn" onClick={startLiveScanner}>📷 Scan barcode live</button>
+                      <p className="scan-divider">— or type / paste manually —</p>
+                      <div className="barcode-line">
+                        <input inputMode="numeric" value={barcode} onChange={(e) => setBarcode(e.target.value)} onKeyDown={(e) => e.key === "Enter" && lookupBarcode()} placeholder="e.g. 9556007120028" />
+                        <button className="primary" disabled={busy} onClick={lookupBarcode}>Find</button>
+                      </div>
+                      {busy && <p className="notice-inline">{notice}</p>}
+                      {!!results.length && <div className="result-list">{results.slice(0,6).map((food) => (<article className="result-card" key={`${food.source}-${food.id}`}><div><span className="source">{food.brand||food.source}</span><strong>{cleanFoodName(food.name)}</strong><small>{Math.round(scaleNutrition(food.per100,food.servingGrams).calories)} kcal</small></div><button className="primary compact" onClick={() => openLogFood(food)}>Add</button></article>))}</div>}
+                    </>
+                  )}
                 </div>
               )}
 
