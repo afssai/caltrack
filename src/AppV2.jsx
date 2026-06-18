@@ -1067,6 +1067,31 @@ function AppV2Inner() {
     }
   }, [data]);
 
+  // Auto-push to cloud 8 seconds after any data change
+  const autoSyncTimer = useRef(null);
+  useEffect(() => {
+    if (!cloudSession?.user?.id || locked || !supabaseConfig.configured) return;
+    if (autoSyncTimer.current) clearTimeout(autoSyncTimer.current);
+    autoSyncTimer.current = setTimeout(() => {
+      syncCalTrack(loadData(), { quiet: true }).catch(() => {});
+    }, 8000);
+    return () => clearTimeout(autoSyncTimer.current);
+  }, [data, cloudSession, locked]);
+
+  // Auto-pull from cloud when tab becomes visible (user switches back to this tab)
+  useEffect(() => {
+    if (!supabaseConfig.configured) return;
+    function onVisible() {
+      if (document.visibilityState === "visible" && cloudSession?.user?.id && !locked) {
+        pullRemoteData(loadData()).then((remote) => {
+          if (remote) setData((current) => mergeAccountData(current, remote));
+        }).catch(() => {});
+      }
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [cloudSession, locked]);
+
   useEffect(() => {
     if (!supabaseConfig.configured) return undefined;
     let cancelled = false;
