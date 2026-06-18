@@ -7,15 +7,14 @@ import { preprocessLabel } from "./ocrPreprocess.js";
 import {
   cacheFoodResult,
   checkSupabaseConnection,
-  createAccountWithPin,
+  createAccountWithPassword,
   enableCloudSync,
   getCurrentSession,
   optimizeImage,
   pullRemoteData,
   readSyncStatus,
   searchFoodCache,
-  setPasswordForPin,
-  signInWithPin,
+  signInWithPassword,
   signOut,
   subscribeToAuthChanges,
   supabaseConfig,
@@ -109,24 +108,24 @@ function CalorieRing({ consumed, burned, target, percent }) {
       {/* Track */}
       <circle cx={cx} cy={cy} r={outerR} fill="none" stroke="rgba(255,255,255,.07)" strokeWidth="8" />
       <circle cx={cx} cy={cy} r={innerR} fill="none" stroke="rgba(255,255,255,.07)" strokeWidth="7" />
-      {/* Consumed arc — outer ring, blue (or red if over) */}
+      {/* Consumed arc — outer ring, orange (or red if over) */}
       <circle cx={cx} cy={cy} r={outerR} fill="none"
-        stroke={isOver ? "#ff334f" : "#4dc3ff"}
+        stroke={isOver ? "#ff3055" : "#ff4500"}
         strokeWidth="8" strokeLinecap="round"
         strokeDasharray={`${cFrac * outerC} ${outerC}`}
         transform="rotate(-90 50 50)" />
-      {/* Burned arc — inner ring, orange */}
+      {/* Burned arc — inner ring, warm orange */}
       {burned > 0 && (
         <circle cx={cx} cy={cy} r={innerR} fill="none"
-          stroke="#ff6a18"
+          stroke="#ff8c00"
           strokeWidth="7" strokeLinecap="round"
           strokeDasharray={`${bFrac * innerC} ${innerC}`}
           transform="rotate(-90 50 50)" />
       )}
       {/* Center label */}
-      <text x="50" y="46" textAnchor="middle" fill="white" fontSize="14" fontWeight="800" fontFamily="'Space Grotesk',sans-serif">{Math.round(percent)}%</text>
-      <text x="50" y="56" textAnchor="middle" fill="rgba(255,255,255,.45)" fontSize="7" letterSpacing="1" fontFamily="'Space Grotesk',sans-serif">USED</text>
-      {burned > 0 && <text x="50" y="65" textAnchor="middle" fill="#ff6a18" fontSize="7" fontWeight="700" fontFamily="'Space Grotesk',sans-serif">{burned} burn</text>}
+      <text x="50" y="46" textAnchor="middle" fill="white" fontSize="14" fontWeight="800" fontFamily="'Inter',sans-serif">{Math.round(percent)}%</text>
+      <text x="50" y="56" textAnchor="middle" fill="rgba(255,255,255,.45)" fontSize="7" letterSpacing="1" fontFamily="'Inter',sans-serif">USED</text>
+      {burned > 0 && <text x="50" y="65" textAnchor="middle" fill="#ff8c00" fontSize="7" fontWeight="700" fontFamily="'Inter',sans-serif">{burned} burn</text>}
     </svg>
   );
 }
@@ -541,13 +540,39 @@ function mergeDiary(localDiary = {}, remoteDiary = {}) {
   return diary;
 }
 
+function mergeDailyLog(localLog = {}, remoteLog = {}) {
+  const localActivities = Array.isArray(localLog.activities) ? localLog.activities : [];
+  const remoteActivities = Array.isArray(remoteLog.activities) ? remoteLog.activities : [];
+  const localMeds = Array.isArray(localLog.medsTaken) ? localLog.medsTaken : [];
+  const remoteMeds = Array.isArray(remoteLog.medsTaken) ? remoteLog.medsTaken : [];
+  const localFlags = localLog.healthFlags && !Array.isArray(localLog.healthFlags) ? localLog.healthFlags : {};
+  const remoteFlags = remoteLog.healthFlags && !Array.isArray(remoteLog.healthFlags) ? remoteLog.healthFlags : {};
+  return {
+    ...remoteLog,
+    ...localLog,
+    water: Math.max(number(localLog.water), number(remoteLog.water)),
+    coffees: Math.max(number(localLog.coffees), number(remoteLog.coffees)),
+    notes: localLog.notes || remoteLog.notes || "",
+    activities: mergeById(localActivities, remoteActivities),
+    medsTaken: [...new Set([...remoteMeds, ...localMeds])],
+    healthFlags: { ...remoteFlags, ...localFlags },
+  };
+}
+
+function mergeDailyLogs(localLogs = {}, remoteLogs = {}) {
+  const dates = new Set([...Object.keys(localLogs), ...Object.keys(remoteLogs)]);
+  const logs = {};
+  for (const logDate of dates) logs[logDate] = mergeDailyLog(localLogs[logDate] || {}, remoteLogs[logDate] || {});
+  return logs;
+}
+
 function mergeAccountData(localData, remoteData) {
   return {
     ...localData,
     ...remoteData,
     profile: { ...localData.profile, ...(remoteData.profile || {}) },
     diary: mergeDiary(localData.diary, remoteData.diary),
-    dailyLogs: { ...(localData.dailyLogs || {}), ...(remoteData.dailyLogs || {}) },
+    dailyLogs: mergeDailyLogs(localData.dailyLogs, remoteData.dailyLogs),
     measurements: mergeById(localData.measurements || [], remoteData.measurements || []),
     customFoods: mergeById(localData.customFoods || [], remoteData.customFoods || []),
     pantry: mergeById(localData.pantry || [], remoteData.pantry || []),
@@ -596,6 +621,8 @@ function LockScreen({ mode, onUnlock, onSetup, owner }) {
   // mode="setup"  = new device, show Sign In / Sign Up tabs
   const [authTab, setAuthTab] = useState("signin"); // "signin" | "signup"
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [pin, setPin] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
@@ -614,17 +641,19 @@ function LockScreen({ mode, onUnlock, onSetup, owner }) {
       if (!ok) setError("Wrong PIN. Try again.");
       return;
     }
-    // ── New device: Sign In or Sign Up ──
+    // New device: sign in/up to the cloud account, then create this device's local PIN.
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setError("Enter a valid email address.");
-    if (!/^\d{4,8}$/.test(pin)) return setError("PIN must be 4–8 digits.");
-    if (authTab === "signup" && pin !== confirm) return setError("PINs don't match.");
+    if (password.length < 8) return setError("Password must be at least 8 characters.");
+    if (authTab === "signup" && password !== confirmPassword) return setError("Passwords don't match.");
+    if (!/^\d{4,8}$/.test(pin)) return setError("Local PIN must be 4–8 digits.");
+    if (authTab === "signup" && pin !== confirm) return setError("Local PINs don't match.");
     setBusy(true);
-    const ok = await onSetup(pin, email.trim(), authTab, (msg) => setStatus(msg));
+    const ok = await onSetup({ pin, email: email.trim(), password, authTab, onStatus: (msg) => setStatus(msg) });
     setBusy(false);
     setStatus("");
     if (!ok) {
       setError(authTab === "signin"
-        ? "Wrong email or PIN. If you're new, use Sign Up."
+        ? "Wrong email or password. If you're new, use Sign Up."
         : "Could not create account. That email may already be registered — try Sign In.");
     }
   };
@@ -643,22 +672,26 @@ function LockScreen({ mode, onUnlock, onSetup, owner }) {
             {error && <div className="form-error" role="alert">{error}</div>}
             {busy && <div className="pin-hashing-status" role="status"><span className="pin-spinner" /><span>Verifying…</span></div>}
             <button className="primary" type="submit" disabled={busy}>Unlock</button>
-            <p className="lock-switch-hint">On a new device? <a href="#" onClick={(e) => { e.preventDefault(); localStorage.removeItem("caltrack.v2.security"); window.location.reload(); }}>Sign in with email + PIN</a></p>
+            <p className="lock-switch-hint">On a new device? <a href="#" onClick={(e) => { e.preventDefault(); localStorage.removeItem("caltrack.v2.security"); window.location.reload(); }}>Sign in with email + password</a></p>
           </>
         ) : (
           <>
             <h1>PULSE</h1>
             <div className="auth-tabs">
-              <button type="button" className={authTab === "signin" ? "active" : ""} onClick={() => { setAuthTab("signin"); setError(""); setConfirm(""); }}>Sign In</button>
+              <button type="button" className={authTab === "signin" ? "active" : ""} onClick={() => { setAuthTab("signin"); setError(""); setConfirm(""); setConfirmPassword(""); }}>Sign In</button>
               <button type="button" className={authTab === "signup" ? "active" : ""} onClick={() => { setAuthTab("signup"); setError(""); }}>Sign Up</button>
             </div>
             <p className="lock-subtext">
-              {authTab === "signin" ? "Welcome back. Enter your email and PIN." : "Create your account. Use the same email + PIN on any device."}
+              {authTab === "signin" ? "Welcome back. Enter your account password, then unlock this device with a PIN." : "Create your account. Use the same email and password on every device."}
             </p>
             <Field label="Email" type="email" inputMode="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={busy} />
-            <Field label="PIN (4–8 digits)" type="password" inputMode="numeric" autoComplete={authTab === "signup" ? "new-password" : "current-password"} maxLength="8" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} disabled={busy} />
+            <Field label="Account password" type="password" autoComplete={authTab === "signup" ? "new-password" : "current-password"} value={password} onChange={(e) => setPassword(e.target.value)} disabled={busy} />
             {authTab === "signup" && (
-              <Field label="Confirm PIN" type="password" inputMode="numeric" autoComplete="new-password" maxLength="8" value={confirm} onChange={(e) => setConfirm(e.target.value.replace(/\D/g, ""))} disabled={busy} />
+              <Field label="Confirm password" type="password" autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} disabled={busy} />
+            )}
+            <Field label="Local unlock PIN (4–8 digits)" type="password" inputMode="numeric" autoComplete="new-password" maxLength="8" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} disabled={busy} />
+            {authTab === "signup" && (
+              <Field label="Confirm local PIN" type="password" inputMode="numeric" autoComplete="new-password" maxLength="8" value={confirm} onChange={(e) => setConfirm(e.target.value.replace(/\D/g, ""))} disabled={busy} />
             )}
             {error && <div className="form-error" role="alert">{error}</div>}
             {busy && <div className="pin-hashing-status" role="status"><span className="pin-spinner" /><span>{status || "Please wait…"}</span></div>}
@@ -973,8 +1006,7 @@ function AppV2Inner() {
   const calAnimRef = useRef(null);
   useEffect(() => {
     const eaten = data.diary[date] ? data.diary[date].reduce((s, e) => s + number(e.calories), 0) : 0;
-    const burned = (data.dailyLogs[date]?.activities || []).reduce((s, a) => s + calcBurnedCalories(a.type, number(a.minutes), number(data.profile.weight)), 0);
-    const target = Math.abs(Math.round(calcDailyTarget(data.profile) - eaten + burned));
+    const target = Math.abs(Math.round(calcDailyTarget(data.profile) - eaten));
     const start = displayCalories;
     const delta = target - start;
     if (Math.abs(delta) < 1) { setDisplayCalories(target); return; }
@@ -990,7 +1022,7 @@ function AppV2Inner() {
     calAnimRef.current = requestAnimationFrame(step);
     return () => { if (calAnimRef.current) cancelAnimationFrame(calAnimRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data.diary[date], data.profile, data.dailyLogs[date]?.activities]);
+  }, [data.diary[date], data.profile]);
 
   // GSAP slide-in animation on tab change
   useEffect(() => {
@@ -1045,7 +1077,6 @@ function AppV2Inner() {
   const notesSaveTimer = useRef(null);
   const [cloudSession, setCloudSession] = useState(null);
   const [syncStatus, setSyncStatus] = useState(readSyncStatus);
-  const [authEmail, setAuthEmail] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
@@ -1058,34 +1089,86 @@ function AppV2Inner() {
   const importRef = useRef(null);
   const syncTimer = useRef(null);
   const cloudLoadedUser = useRef("");
+  const applyingCloudData = useRef(false);
+  const skipNextAutoSync = useRef(false);
+  const lastLocalChangeAt = useRef(0);
+  const syncInFlight = useRef(false);
+  const pendingSync = useRef(false);
 
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      if (applyingCloudData.current) {
+        applyingCloudData.current = false;
+        skipNextAutoSync.current = true;
+      }
+      else lastLocalChangeAt.current = Date.now();
     } catch {
       setNotice("Local storage is full. Export a backup and remove large progress photos.");
     }
   }, [data]);
 
-  // Auto-push to cloud 8 seconds after any data change
+  async function pushAndPullLatest(session = cloudSession) {
+    if (!session?.user?.id || locked || !supabaseConfig.configured || !online) return null;
+    if (syncInFlight.current) {
+      pendingSync.current = true;
+      return null;
+    }
+    syncInFlight.current = true;
+    try {
+      const merged = await syncCalTrack(loadData(), session);
+      applyingCloudData.current = true;
+      setData((current) => mergeAccountData(current, merged));
+      setSyncStatus(readSyncStatus());
+      return merged;
+    } finally {
+      syncInFlight.current = false;
+      if (pendingSync.current) {
+        pendingSync.current = false;
+        window.setTimeout(() => pushAndPullLatest(session).catch(() => {}), 250);
+      }
+    }
+  }
+
+  function applyRemoteData(remoteData) {
+    if (!remoteData) return;
+    applyingCloudData.current = true;
+    setData((current) => mergeAccountData(current, remoteData));
+  }
+
+  // Auto-push local edits shortly after the user changes anything.
   const autoSyncTimer = useRef(null);
   useEffect(() => {
     if (!cloudSession?.user?.id || locked || !supabaseConfig.configured) return;
+    if (skipNextAutoSync.current) {
+      skipNextAutoSync.current = false;
+      return;
+    }
     if (autoSyncTimer.current) clearTimeout(autoSyncTimer.current);
     autoSyncTimer.current = setTimeout(() => {
-      syncCalTrack(loadData(), { quiet: true }).catch(() => {});
+      pushAndPullLatest(cloudSession).catch(() => {});
     }, 1500);
     return () => clearTimeout(autoSyncTimer.current);
   }, [data, cloudSession, locked]);
+
+  // Pull remote updates while the app is open so phone and desktop stay close.
+  useEffect(() => {
+    if (!cloudSession?.user?.id || locked || !supabaseConfig.configured) return undefined;
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== "visible" || syncInFlight.current) return;
+      if (Date.now() - lastLocalChangeAt.current < 2200) return;
+      pullRemoteData(loadData()).then(applyRemoteData).catch(() => {});
+    }, 1500);
+    return () => window.clearInterval(interval);
+  }, [cloudSession, locked]);
 
   // Auto-pull from cloud when tab becomes visible (user switches back to this tab)
   useEffect(() => {
     if (!supabaseConfig.configured) return;
     function onVisible() {
       if (document.visibilityState === "visible" && cloudSession?.user?.id && !locked) {
-        pullRemoteData(loadData()).then((remote) => {
-          if (remote) setData((current) => mergeAccountData(current, remote));
-        }).catch(() => {});
+        if (Date.now() - lastLocalChangeAt.current < 2200) pushAndPullLatest(cloudSession).catch(() => {});
+        else pullRemoteData(loadData()).then(applyRemoteData).catch(() => {});
       }
     }
     document.addEventListener("visibilitychange", onVisible);
@@ -1106,7 +1189,7 @@ function AppV2Inner() {
           setSyncStatus(meta);
           const remoteData = await pullRemoteData(loadData()).catch(() => null);
           if (remoteData && !cancelled) {
-            setData((current) => mergeAccountData(current, remoteData));
+            applyRemoteData(remoteData);
             flash("Account data loaded. Local data was preserved.");
           }
         }
@@ -1214,8 +1297,8 @@ function AppV2Inner() {
     ? Math.round(((tdeeVal - dailyTarget) * 7 / 7700) * 10) / 10
     : 0;
   const remaining = dailyTarget - totals.calories;
-  const netRemaining = remaining + activityCalories;
-  const estimatedDeficit = Math.max(0, netRemaining);
+  const netRemaining = remaining;
+  const estimatedDeficit = Math.max(0, (tdeeVal || dailyTarget) + activityCalories - totals.calories);
 
   // Weight progress
   const weightEntries = useMemo(
@@ -1234,7 +1317,7 @@ function AppV2Inner() {
 
   // Safe deficit hint — 500 kcal/day ≈ 0.5 kg/week
   const safeDeficitTarget = 500;
-  const currentDeficit = netRemaining;
+  const currentDeficit = estimatedDeficit;
   const deficitStatus = currentDeficit >= safeDeficitTarget
     ? "on track"
     : currentDeficit > 0
@@ -1298,22 +1381,6 @@ function AppV2Inner() {
     return message || fallback;
   }
 
-  async function sendCloudLink() {
-    if (!supabaseConfig.configured) return flash("Cloud backup is not available in this copy of PULSE.");
-    setSyncing(true);
-    try {
-      await sendMagicLink(authEmail.trim());
-      setCloudHealth({ status: "reachable", message: "Sign-in link sent. Check your email." });
-      flash("Check your email for the sign-in link.");
-    } catch (error) {
-      const message = friendlyError(error, "Could not send the sign-in link.");
-      setCloudHealth({ status: "error", message });
-      flash(message);
-    } finally {
-      setSyncing(false);
-    }
-  }
-
   async function runCloudSync({ quiet = false } = {}) {
     if (!supabaseConfig.configured) return flash("Cloud backup is not available in this copy of PULSE.");
     if (!cloudSession?.user?.id) return flash("Sign in before syncing.");
@@ -1322,7 +1389,7 @@ function AppV2Inner() {
     if (!quiet) setNotice("Syncing your PULSE data...");
     try {
       const merged = await syncCalTrack(data, cloudSession);
-      setData(merged);
+      applyRemoteData(merged);
       const nextStatus = readSyncStatus();
       setSyncStatus(nextStatus);
       if (!quiet) flash("Cloud backup complete. Local data was preserved.");
@@ -1345,9 +1412,8 @@ function AppV2Inner() {
     setOnboardingDismissed(true);
   }
 
-  async function setupPin(pin, email = "", authTab = "signin", onStatus = () => {}) {
+  async function setupPin({ pin, email = "", password = "", authTab = "signin", onStatus = () => {} }) {
     if (!supabaseConfig.configured || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      // No Supabase — local only
       const next = await hashPin(pin);
       const record = { ...next, owner: email || "" };
       localStorage.setItem(SECURITY_KEY, JSON.stringify(record));
@@ -1359,16 +1425,14 @@ function AppV2Inner() {
 
     if (authTab === "signin") {
       onStatus("Signing in…");
-      const result = await signInWithPin(email, pin);
-      if (!result.ok) return false; // wrong email or PIN — tell user
+      const result = await signInWithPassword(email, password);
+      if (!result.ok) return false;
       session = result.session;
     } else {
-      // signup
       onStatus("Creating your account…");
-      const result = await createAccountWithPin(email, pin);
+      const result = await createAccountWithPassword(email, password);
       if (!result.ok) return false;
       if (result.needsConfirmation) {
-        // "Confirm email" is still ON in Supabase — can't proceed
         return false;
       }
       session = result.session;
@@ -1381,9 +1445,8 @@ function AppV2Inner() {
         cloudLoadedUser.current = session.user.id;
         enableCloudSync();
         // Push local data first (so phone data goes up), then pull everything back
-        await syncCalTrack(loadData(), { quiet: true });
-        const remoteData = await pullRemoteData(loadData());
-        if (remoteData) setData((current) => mergeAccountData(current, remoteData));
+        const merged = await syncCalTrack(loadData(), session);
+        applyRemoteData(merged);
       } catch { /* non-fatal */ }
     }
 
@@ -1405,21 +1468,16 @@ function AppV2Inner() {
     const email = security.owner;
     if (supabaseConfig.configured && email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       try {
-        let session = cloudSession;
-        if (!session) {
-          const result = await signInWithPin(email, pin);
-          if (result.ok && result.session) {
-            session = result.session;
-            setCloudSession(session);
-            cloudLoadedUser.current = session.user.id;
-            enableCloudSync();
-          }
+        let session = cloudSession || await getCurrentSession().catch(() => null);
+        if (session && !cloudSession) {
+          setCloudSession(session);
+          cloudLoadedUser.current = session.user.id;
+          enableCloudSync();
         }
         if (session) {
           // Full bidirectional sync: push local data then pull remote — keeps all devices identical
-          await syncCalTrack(loadData(), { quiet: true });
-          const remoteData = await pullRemoteData(loadData());
-          if (remoteData) setData((current) => mergeAccountData(current, remoteData));
+          const merged = await syncCalTrack(loadData(), session);
+          applyRemoteData(merged);
         }
       } catch { /* non-fatal */ }
     }
@@ -2272,7 +2330,7 @@ function AppV2Inner() {
           <strong className={netRemaining < 0 ? "cal-over" : ""}>{displayCalories}</strong>
           <small>{netRemaining >= 0 ? "kcal left today" : "over target"}</small>
           {projectedWeeklyLoss > 0 && <span className="cal-projection">~{projectedWeeklyLoss} kg/week loss pace</span>}
-          <div className="calorie-equation"><span>{Math.round(totals.calories)} food</span><i /><span>{dailyTarget} target</span>{activityCalories > 0 && <><i /><span>{activityCalories} burn</span></>}</div>
+          <div className="calorie-equation"><span>{Math.round(totals.calories)} food</span><i /><span>{dailyTarget} food target</span>{activityCalories > 0 && <><i /><span>{activityCalories} burn = deficit</span></>}</div>
         </div>
         <CalorieRing
           consumed={Math.round(totals.calories)}
@@ -2388,9 +2446,9 @@ function AppV2Inner() {
               {deficitStatus === "below target" && ` — aim for ${safeDeficitTarget} kcal`}
             </div>
           )}
-          {netRemaining > 0 && (
+          {remaining > 0 && (
             <div className="hint-pill">
-              🍽️ <strong>{Math.round(netRemaining)} kcal</strong> left to eat today{activityCalories > 0 ? ` (incl. ${activityCalories} burned)` : ""}
+              🍽️ <strong>{Math.round(remaining)} kcal</strong> left to eat today
             </div>
           )}
           {totals.protein < number(data.profile.proteinTarget) * 0.5 && (
@@ -3094,15 +3152,6 @@ function AppV2Inner() {
         {tab === "settings" && (
           <section className="panel stack">
             <div className="section-heading"><div><span className="eyebrow">Account</span><h2><User size={18} style={{verticalAlign:"middle",marginRight:6,color:"var(--accent-good)"}} aria-hidden="true" />Me</h2></div></div>
-            <div className="today-log-card profile-shortcut-card">
-              <div>
-                <span className="eyebrow violet">Home food ideas</span>
-                <h2>Pantry & recipes</h2>
-                <p>Keep a simple list of what you have at home, then use it when you want meal ideas.</p>
-              </div>
-              <button className="secondary compact" onClick={() => setTab("coach")}>Open</button>
-            </div>
-
             <div className="tool-card profile-card">
               <div className="section-heading"><div><span className="eyebrow crimson">Step 1 — About you</span><h2><User size={18} style={{verticalAlign:"middle",marginRight:6,color:"var(--accent-warm)"}} />Personal profile</h2></div></div>
               <p className="helper">Fill in waist + neck to unlock body-fat tracking (U.S. Navy method) and the more accurate Katch-McArdle BMR. Height, age and weight are needed for Mifflin fallback.</p>
@@ -3224,7 +3273,7 @@ function AppV2Inner() {
                   <p className="helper">Backup uploads current local diary, goals, pantry, recipes, measurements, and optimized progress photos. Local data stays in this browser as fallback.</p>
                 </>
               ) : supabaseConfig.configured ? (
-                <p className="helper">Set up your PIN lock below to enable cloud backup. Use the same email and PIN on any device to access your data.</p>
+                <p className="helper">Cloud backup uses your account email and password. The PIN below only locks this device.</p>
               ) : null}
             </div>
             <div className="tool-card">
@@ -3346,7 +3395,7 @@ function AppV2Inner() {
             </div>
             <div className="dial-burn">
               <Flame size={16} style={{ color: "var(--accent-warm)", verticalAlign: "middle", marginRight: 4 }} />
-              <span>~{calcBurnedCalories(activityDraft.type, number(activityDraft.minutes), number(data.profile.weight))} kcal burned → adds to your calorie budget</span>
+              <span>~{calcBurnedCalories(activityDraft.type, number(activityDraft.minutes), number(data.profile.weight))} kcal burned → increases your deficit, not your food budget</span>
             </div>
             <div className="modal-actions">
               <button className="secondary" onClick={() => setActivityDraft(null)}>Cancel</button>
