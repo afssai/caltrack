@@ -283,6 +283,46 @@ function WeightJourneyCard({ entries, highestWeight, currentWeight, goalWeight: 
   );
 }
 
+/* ───────────────────────── ScrollPicker ───────────────────────── */
+const ITEM_H = 48;
+function ScrollPicker({ value, onChange, min = 1, max = 180, suffix = "min" }) {
+  const ref = useRef(null);
+  const settling = useRef(false);
+  const items = useMemo(() => Array.from({ length: max - min + 1 }, (_, i) => min + i), [min, max]);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || settling.current) return;
+    el.scrollTop = (value - min) * ITEM_H;
+  }, [value, min]);
+
+  const onScroll = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    settling.current = true;
+    const idx = Math.round(el.scrollTop / ITEM_H);
+    onChange(Math.min(max, Math.max(min, min + idx)));
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { settling.current = false; }, 300);
+  }, [min, max, onChange]);
+
+  return (
+    <div className="scroll-picker-wrap">
+      <div className="scroll-picker-hl" />
+      <div ref={ref} className="scroll-picker" onScroll={onScroll}>
+        <div style={{ height: ITEM_H }} />
+        {items.map((v) => (
+          <div key={v} className={`scroll-picker-item${v === value ? " sel" : ""}`}>{v}</div>
+        ))}
+        <div style={{ height: ITEM_H }} />
+      </div>
+      <div className="scroll-picker-suffix">{suffix}</div>
+      <div className="scroll-picker-fade top" />
+      <div className="scroll-picker-fade bot" />
+    </div>
+  );
+}
+
 /* ───────────────────────── ActivityCard ───────────────────────── */
 const ACTIVITY_PRESETS = [
   { name: "Walk",    icon: "🚶", met: 3.5 },
@@ -296,22 +336,19 @@ const ACTIVITY_PRESETS = [
 ];
 
 function ActivityCard({ dailyLog, patchDailyLog, weightKg }) {
-  const [selected, setSelected]   = useState(null);
-  const [duration, setDuration]   = useState(30);
+  const [selected, setSelected]     = useState(null);
+  const [duration, setDuration]     = useState(30);
   const [customName, setCustomName] = useState("");
   const [customKcal, setCustomKcal] = useState("");
-  const activities = dailyLog.activities || [];
+  const activities  = dailyLog.activities || [];
   const totalBurned = activities.reduce((s, a) => s + number(a.kcal), 0);
-
-  const weight = number(weightKg) || 70;
-  const previewKcal = selected && selected.met
-    ? Math.round(selected.met * weight * (duration / 60))
-    : null;
+  const weight      = number(weightKg) || 70;
+  const previewKcal = selected?.met ? Math.round(selected.met * weight * (duration / 60)) : null;
 
   function logActivity() {
     let name, kcal;
     if (selected?.met) {
-      name = `${selected.name} ${duration} min`;
+      name = `${selected.icon} ${selected.name} ${duration} min`;
       kcal = Math.round(selected.met * weight * (duration / 60));
     } else if (customName.trim() && number(customKcal) > 0) {
       name = customName.trim();
@@ -321,75 +358,57 @@ function ActivityCard({ dailyLog, patchDailyLog, weightKg }) {
     setSelected(null); setCustomName(""); setCustomKcal("");
   }
 
-  function removeActivity(id) {
-    patchDailyLog({ activities: activities.filter((a) => a.id !== id) });
-  }
-
   return (
     <div className="activity-card">
       <div className="activity-card-top">
-        <div className="activity-card-left">
-          <Activity size={18} color="#00d278" />
-          <span className="activity-card-title">Activity</span>
-        </div>
-        {totalBurned > 0 && <span className="activity-card-burned">🟢 −{Math.round(totalBurned)} kcal burned</span>}
+        <span className="activity-card-title">🏃 Move</span>
+        {totalBurned > 0 && <span className="activity-burned-badge">🔥 −{Math.round(totalBurned)} kcal</span>}
       </div>
 
       {activities.length > 0 && (
         <div className="activity-list">
           {activities.map((a) => (
             <div key={a.id} className="activity-row">
-              <span className="activity-row-name">{a.name}</span>
-              <span className="activity-row-cal">−{Math.round(a.kcal)} kcal</span>
-              <button className="activity-row-del" onClick={() => removeActivity(a.id)}>✕</button>
+              <span>{a.name}</span>
+              <span className="activity-row-cal">−{Math.round(a.kcal)}</span>
+              <button className="activity-row-del" onClick={() => patchDailyLog({ activities: activities.filter((x) => x.id !== a.id) })}>✕</button>
             </div>
           ))}
         </div>
       )}
 
-      {/* Preset pills */}
-      <div className="activity-presets">
+      <div className="activity-icon-grid">
         {ACTIVITY_PRESETS.map((p) => (
-          <button key={p.name}
-            className={`activity-preset-btn${selected?.name === p.name ? " active" : ""}`}
-            onClick={() => setSelected(selected?.name === p.name ? null : p)}>
-            {p.icon} {p.name}
+          <button
+            key={p.name}
+            className={`activity-icon-btn${selected?.name === p.name ? " active" : ""}`}
+            onClick={() => setSelected(selected?.name === p.name ? null : p)}
+          >
+            <span className="aib-emoji">{p.icon}</span>
+            <span className="aib-label">{p.name}</span>
           </button>
         ))}
       </div>
 
-      {/* Duration slider or custom form */}
       {selected && (
         <div className="activity-picker">
           {selected.met ? (
             <>
-              <div className="duration-slider-wrap">
-                <div className="duration-slider-labels">
-                  <span>{selected.icon} {selected.name}</span>
-                  <strong className="duration-value">{duration} min</strong>
-                </div>
-                <input
-                  type="range" min="5" max="120" step="5"
-                  value={duration}
-                  onChange={(e) => setDuration(Number(e.target.value))}
-                  className="duration-slider"
-                  style={{ "--pct": `${((duration - 5) / 115) * 100}%` }}
-                />
-                <div className="duration-slider-ticks">
-                  <span>5</span><span>30</span><span>60</span><span>90</span><span>120</span>
+              <div className="activity-drum-row">
+                <ScrollPicker value={duration} onChange={setDuration} min={1} max={180} suffix="min" />
+                <div className="activity-drum-kcal">
+                  <strong>{previewKcal ?? "—"}</strong>
+                  <span>kcal burned</span>
                 </div>
               </div>
-              {previewKcal !== null && (
-                <p className="activity-kcal-preview">≈ <strong style={{color:"#00d278"}}>{previewKcal} kcal</strong> burned · based on {weight} kg body weight</p>
-              )}
-              <button className="primary" style={{ width: "100%", marginTop: 10 }} onClick={logActivity}>
-                Log {selected.name} {duration} min → −{previewKcal} kcal
+              <button className="primary log-activity-btn" onClick={logActivity}>
+                Log {selected.icon} {duration} min · −{previewKcal} kcal
               </button>
             </>
           ) : (
             <div className="activity-add-form">
               <input placeholder="Activity name" value={customName} onChange={(e) => setCustomName(e.target.value)} autoFocus />
-              <input type="number" placeholder="kcal" min="0" max="5000" value={customKcal} onChange={(e) => setCustomKcal(e.target.value)} style={{ width: 80 }} onKeyDown={(e) => e.key === "Enter" && logActivity()} />
+              <input type="number" placeholder="kcal" min="0" value={customKcal} onChange={(e) => setCustomKcal(e.target.value)} style={{ width: 80 }} onKeyDown={(e) => e.key === "Enter" && logActivity()} />
               <button className="activity-add-btn" onClick={logActivity}>Add</button>
             </div>
           )}
@@ -1454,19 +1473,20 @@ function AppV2Inner() {
               {/* Macro row */}
               <div className="macro-grid">
                 {[
-                  { label: "Protein", value: totals.protein, target: data.profile.proteinTarget, color: "#4dc3ff" },
-                  { label: "Carbs",   value: totals.carbs,   target: data.profile.carbsTarget,   color: "#a99cff" },
-                  { label: "Fat",     value: totals.fat,     target: data.profile.fatTarget,     color: "#ff4500" },
+                  { icon: "🥩", label: "Protein", value: totals.protein, target: data.profile.proteinTarget, color: "#4dc3ff" },
+                  { icon: "🍚", label: "Carbs",   value: totals.carbs,   target: data.profile.carbsTarget,   color: "#a99cff" },
+                  { icon: "🧈", label: "Fat",     value: totals.fat,     target: data.profile.fatTarget,     color: "#ffaa00" },
+                  { icon: "🌾", label: "Fiber",   value: totals.fiber,   target: data.profile.fiberTarget,   color: "#00d278" },
                 ].map((m) => {
                   const pct = m.target ? Math.min(100, (m.value / m.target) * 100) : 0;
                   return (
                     <div key={m.label} className="macro-chip">
-                      <strong>{round(m.value)}g</strong>
-                      <span>{m.label}</span>
+                      <span className="macro-icon">{m.icon}</span>
+                      <strong className="macro-val">{round(m.value)}g</strong>
                       <div className="macro-bar-rail">
                         <div className="macro-bar-fill" style={{ width: `${pct}%`, background: m.color }} />
                       </div>
-                      <small>{m.target ? `${m.target}g goal` : "—"}</small>
+                      <small className="macro-goal">{m.target ? `/ ${m.target}g` : "—"}</small>
                     </div>
                   );
                 })}
