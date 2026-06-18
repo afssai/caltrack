@@ -56,21 +56,34 @@ class ErrorBoundary extends React.Component {
 }
 
 /* ───────────────────────── CalorieRing ───────────────────────── */
-function CalorieRing({ consumed, target, percent, size = 100 }) {
-  const r = 40, cx = 50, cy = 50;
-  const circ = 2 * Math.PI * r;
-  const frac = Math.min(1, consumed / Math.max(1, target));
-  const isOver = frac >= 1;
+function CalorieRing({ consumed, burned = 0, target, percent, size = 100 }) {
+  const outerR = 40, innerR = 29, cx = 50, cy = 50;
+  const outerC = 2 * Math.PI * outerR;
+  const innerC = 2 * Math.PI * innerR;
+  const cFrac  = Math.min(1, consumed / Math.max(1, target));
+  const bFrac  = Math.min(1, burned  / Math.max(1, target));
+  const isOver = cFrac >= 1;
   return (
     <svg width={size} height={size} viewBox="0 0 100 100" className="calorie-ring-svg" aria-hidden="true">
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,.07)" strokeWidth="9" />
-      <circle cx={cx} cy={cy} r={r} fill="none"
+      {/* tracks */}
+      <circle cx={cx} cy={cy} r={outerR} fill="none" stroke="rgba(255,255,255,.07)" strokeWidth="9" />
+      <circle cx={cx} cy={cy} r={innerR} fill="none" stroke="rgba(255,255,255,.07)" strokeWidth="7" />
+      {/* consumed — outer, orange→red */}
+      <circle cx={cx} cy={cy} r={outerR} fill="none"
         stroke={isOver ? "#ff5050" : "#ff4500"}
         strokeWidth="9" strokeLinecap="round"
-        strokeDasharray={`${frac * circ} ${circ}`}
+        strokeDasharray={`${cFrac * outerC} ${outerC}`}
         transform="rotate(-90 50 50)" />
-      <text x="50" y="46" textAnchor="middle" fill="white" fontSize="15" fontWeight="800" fontFamily="'Inter',sans-serif">{Math.round(percent)}%</text>
-      <text x="50" y="57" textAnchor="middle" fill="rgba(255,255,255,.45)" fontSize="7" letterSpacing="1" fontFamily="'Inter',sans-serif">USED</text>
+      {/* burned — inner, green */}
+      {burned > 0 && (
+        <circle cx={cx} cy={cy} r={innerR} fill="none"
+          stroke="#00d278"
+          strokeWidth="7" strokeLinecap="round"
+          strokeDasharray={`${bFrac * innerC} ${innerC}`}
+          transform="rotate(-90 50 50)" />
+      )}
+      <text x="50" y="45" textAnchor="middle" fill="white" fontSize="15" fontWeight="800" fontFamily="'Inter',sans-serif">{Math.round(percent)}%</text>
+      <text x="50" y="55" textAnchor="middle" fill="rgba(255,255,255,.4)" fontSize="6.5" letterSpacing="1" fontFamily="'Inter',sans-serif">EATEN</text>
     </svg>
   );
 }
@@ -271,17 +284,42 @@ function WeightJourneyCard({ entries, highestWeight, currentWeight, goalWeight: 
 }
 
 /* ───────────────────────── ActivityCard ───────────────────────── */
-function ActivityCard({ dailyLog, patchDailyLog }) {
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [kcal, setKcal] = useState("");
+const ACTIVITY_PRESETS = [
+  { name: "Walk",    icon: "🚶", met: 3.5 },
+  { name: "Run",     icon: "🏃", met: 8.0 },
+  { name: "Swim",    icon: "🏊", met: 6.0 },
+  { name: "Cycle",   icon: "🚴", met: 6.5 },
+  { name: "Weights", icon: "🏋️", met: 4.0 },
+  { name: "HIIT",    icon: "⚡", met: 10.0 },
+  { name: "Yoga",    icon: "🧘", met: 2.5 },
+  { name: "Other",   icon: "➕", met: null },
+];
+const DURATIONS = [15, 30, 45, 60];
+
+function ActivityCard({ dailyLog, patchDailyLog, weightKg }) {
+  const [selected, setSelected]   = useState(null);
+  const [duration, setDuration]   = useState(30);
+  const [customName, setCustomName] = useState("");
+  const [customKcal, setCustomKcal] = useState("");
   const activities = dailyLog.activities || [];
   const totalBurned = activities.reduce((s, a) => s + number(a.kcal), 0);
 
-  function addActivity() {
-    if (!name.trim() || !number(kcal)) return;
-    patchDailyLog({ activities: [...activities, { id: makeId(), name: name.trim(), kcal: number(kcal) }] });
-    setName(""); setKcal(""); setOpen(false);
+  const weight = number(weightKg) || 70;
+  const previewKcal = selected && selected.met
+    ? Math.round(selected.met * weight * (duration / 60))
+    : null;
+
+  function logActivity() {
+    let name, kcal;
+    if (selected?.met) {
+      name = `${selected.name} ${duration} min`;
+      kcal = Math.round(selected.met * weight * (duration / 60));
+    } else if (customName.trim() && number(customKcal) > 0) {
+      name = customName.trim();
+      kcal = number(customKcal);
+    } else return;
+    patchDailyLog({ activities: [...activities, { id: makeId(), name, kcal }] });
+    setSelected(null); setCustomName(""); setCustomKcal("");
   }
 
   function removeActivity(id) {
@@ -292,11 +330,12 @@ function ActivityCard({ dailyLog, patchDailyLog }) {
     <div className="activity-card">
       <div className="activity-card-top">
         <div className="activity-card-left">
-          <Activity size={18} color="#ff8c00" />
+          <Activity size={18} color="#00d278" />
           <span className="activity-card-title">Activity</span>
         </div>
-        {totalBurned > 0 && <span className="activity-card-burned">−{Math.round(totalBurned)} kcal burned</span>}
+        {totalBurned > 0 && <span className="activity-card-burned">🟢 −{Math.round(totalBurned)} kcal burned</span>}
       </div>
+
       {activities.length > 0 && (
         <div className="activity-list">
           {activities.map((a) => (
@@ -308,14 +347,45 @@ function ActivityCard({ dailyLog, patchDailyLog }) {
           ))}
         </div>
       )}
-      {open ? (
-        <div className="activity-add-form">
-          <input placeholder="e.g. Running 30 min" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && kcal && addActivity()} autoFocus />
-          <input type="number" placeholder="kcal" min="0" max="3000" value={kcal} onChange={(e) => setKcal(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addActivity()} style={{ width: 72 }} />
-          <button className="activity-add-btn" onClick={addActivity}>Add</button>
+
+      {/* Preset pills */}
+      <div className="activity-presets">
+        {ACTIVITY_PRESETS.map((p) => (
+          <button key={p.name}
+            className={`activity-preset-btn${selected?.name === p.name ? " active" : ""}`}
+            onClick={() => setSelected(selected?.name === p.name ? null : p)}>
+            {p.icon} {p.name}
+          </button>
+        ))}
+      </div>
+
+      {/* Duration or custom form */}
+      {selected && (
+        <div className="activity-picker">
+          {selected.met ? (
+            <>
+              <div className="activity-durations">
+                {DURATIONS.map((d) => (
+                  <button key={d}
+                    className={`duration-btn${duration === d ? " active" : ""}`}
+                    onClick={() => setDuration(d)}>{d} min</button>
+                ))}
+              </div>
+              {previewKcal !== null && (
+                <p className="activity-kcal-preview">≈ {previewKcal} kcal burned for {weight} kg</p>
+              )}
+              <button className="primary" style={{ width: "100%", marginTop: 8 }} onClick={logActivity}>
+                Log {selected.name} {duration} min
+              </button>
+            </>
+          ) : (
+            <div className="activity-add-form">
+              <input placeholder="Activity name" value={customName} onChange={(e) => setCustomName(e.target.value)} autoFocus />
+              <input type="number" placeholder="kcal" min="0" max="5000" value={customKcal} onChange={(e) => setCustomKcal(e.target.value)} style={{ width: 80 }} onKeyDown={(e) => e.key === "Enter" && logActivity()} />
+              <button className="activity-add-btn" onClick={logActivity}>Add</button>
+            </div>
+          )}
         </div>
-      ) : (
-        <button className="activity-add-open" onClick={() => setOpen(true)}>+ Log activity</button>
       )}
     </div>
   );
@@ -1314,115 +1384,147 @@ function AppV2Inner() {
       <main ref={mainRef}>
 
         {/* ═══ TODAY ═══ */}
-        {tab === "diary" && (
-          <>
-            {/* Hero ring */}
-            <div className="today-hero">
-              <div className="hero-ring-wrap">
-                <CalorieRing consumed={Math.round(totals.calories)} target={dailyTarget} percent={caloriePercent} size={160} />
-              </div>
-              <div className="hero-ring-copy">
-                <strong className={`hero-kcal${remaining < 0 ? " over" : ""}`}>{displayCalories}</strong>
-                <span className="hero-sub">{remaining >= 0 ? "kcal left today" : "kcal over target"}</span>
-                <span className="hero-ratio" style={{ color: "var(--text3)", fontSize: 11 }}>{Math.round(totals.calories)} / {dailyTarget} kcal</span>
-              </div>
-            </div>
+        {tab === "diary" && (() => {
+          const burnedToday   = (dailyLog.activities || []).reduce((s, a) => s + number(a.kcal), 0);
+          const netConsumed   = Math.max(0, totals.calories - burnedToday);
+          const netRemaining  = dailyTarget - netConsumed;
+          const bmr           = calcBMRMifflin(data.profile) || 0;
+          const tdee          = calcTDEE(data.profile) || 0;
+          const deficitPct    = tdee > 0 ? Math.round((1 - dailyTarget / tdee) * 100) : 0;
+          const weightEntries2= [...data.measurements].filter((m) => number(m.weight) > 0).sort((a,b) => a.date.localeCompare(b.date));
+          const startW        = number(data.profile.highestWeight) || (weightEntries2[0] ? number(weightEntries2[0].weight) : 0);
+          const curW          = weightEntries2.length ? number(weightEntries2[weightEntries2.length-1].weight) : number(data.profile.weight);
+          const goalW         = number(data.profile.goalWeight);
+          const lost          = startW && curW ? round(startW - curW) : 0;
+          const toGo          = curW && goalW ? round(curW - goalW) : 0;
+          const journeyPct    = startW && goalW && startW > goalW ? Math.min(100, Math.max(0, (lost / (startW - goalW)) * 100)) : 0;
 
-            {/* Macro row */}
-            <div className="macro-grid">
-              {[
-                { label: "Protein", value: totals.protein, target: data.profile.proteinTarget, color: "#4dc3ff" },
-                { label: "Carbs",   value: totals.carbs,   target: data.profile.carbsTarget,   color: "#a99cff" },
-                { label: "Fat",     value: totals.fat,     target: data.profile.fatTarget,     color: "#ff4500" },
-              ].map((m) => {
-                const pct = m.target ? Math.min(100, (m.value / m.target) * 100) : 0;
-                return (
-                  <div key={m.label} className="macro-chip">
-                    <strong>{round(m.value)}g</strong>
-                    <span>{m.label}</span>
-                    <div className="macro-bar-rail">
-                      <div className="macro-bar-fill" style={{ width: `${pct}%`, background: m.color }} />
+          const motivational = (() => {
+            if (!curW) return "Set your weight in Me tab to track progress.";
+            if (journeyPct >= 100) return "🎉 Goal reached! You crushed it.";
+            if (journeyPct >= 75)  return `Almost there! Only ${toGo} kg to go.`;
+            if (journeyPct >= 50)  return `Halfway there — ${lost} kg down, ${toGo} kg to go!`;
+            if (journeyPct >= 25)  return `Great start — ${lost} kg down so far!`;
+            if (lost > 0)          return `${lost} kg down. Every day counts — keep going!`;
+            return goalW && curW > goalW ? `${toGo} kg to your goal. Log consistently and you'll get there.` : "Log your meals daily to see your progress here.";
+          })();
+
+          return (
+            <>
+              {/* Hero ring */}
+              <div className="today-hero">
+                <div className="hero-ring-wrap">
+                  <CalorieRing consumed={Math.round(totals.calories)} burned={Math.round(burnedToday)} target={dailyTarget} percent={caloriePercent} size={168} />
+                  {burnedToday > 0 && (
+                    <div className="ring-legend">
+                      <span className="ring-legend-dot" style={{ background: "#ff4500" }} />eaten
+                      <span className="ring-legend-dot" style={{ background: "#00d278", marginLeft: 8 }} />burned
                     </div>
-                    <small>{m.target ? `${m.target}g goal` : "—"}</small>
+                  )}
+                </div>
+                <div className="hero-ring-copy">
+                  <strong className={`hero-kcal${netRemaining < 0 ? " over" : ""}`}>{Math.abs(Math.round(netRemaining))}</strong>
+                  <span className="hero-sub">{netRemaining >= 0 ? "kcal left today" : "kcal over target"}</span>
+                  <span className="hero-ratio">{Math.round(totals.calories)} eaten · {Math.round(burnedToday)} burned · {dailyTarget} target</span>
+                </div>
+              </div>
+
+              {/* BMR / deficit strip */}
+              {bmr > 0 && (
+                <div className="bmr-strip">
+                  <div className="bmr-stat"><span>At rest (BMR)</span><strong>{bmr} kcal</strong></div>
+                  {tdee > 0 && <div className="bmr-stat"><span>With activity (TDEE)</span><strong>{tdee} kcal</strong></div>}
+                  <div className="bmr-stat"><span>Your eat target</span><strong style={{ color: "var(--accent)" }}>{dailyTarget} kcal</strong></div>
+                  {deficitPct > 0 && <div className="bmr-stat"><span>Deficit</span><strong style={{ color: "var(--success)" }}>−{deficitPct}%</strong></div>}
+                </div>
+              )}
+
+              {/* Macro row */}
+              <div className="macro-grid">
+                {[
+                  { label: "Protein", value: totals.protein, target: data.profile.proteinTarget, color: "#4dc3ff" },
+                  { label: "Carbs",   value: totals.carbs,   target: data.profile.carbsTarget,   color: "#a99cff" },
+                  { label: "Fat",     value: totals.fat,     target: data.profile.fatTarget,     color: "#ff4500" },
+                ].map((m) => {
+                  const pct = m.target ? Math.min(100, (m.value / m.target) * 100) : 0;
+                  return (
+                    <div key={m.label} className="macro-chip">
+                      <strong>{round(m.value)}g</strong>
+                      <span>{m.label}</span>
+                      <div className="macro-bar-rail">
+                        <div className="macro-bar-fill" style={{ width: `${pct}%`, background: m.color }} />
+                      </div>
+                      <small>{m.target ? `${m.target}g goal` : "—"}</small>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Water card */}
+              <div className="water-card">
+                <div className="water-top">
+                  <div className="water-left">
+                    <Droplets size={18} color="#4dc3ff" />
+                    <span className="water-title">Water</span>
                   </div>
-                );
-              })}
-            </div>
-
-            {/* Water card */}
-            <div className="water-card">
-              <div className="water-top">
-                <div className="water-left">
-                  <Droplets size={18} color="#4dc3ff" />
-                  <span className="water-title">Water</span>
+                  <span className="water-value">{Math.round(number(dailyLog.water))} / {data.profile.waterTarget || 2500} ml</span>
                 </div>
-                <span className="water-value">{Math.round(number(dailyLog.water))} ml</span>
-              </div>
-              <div className="water-dots">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className={`water-dot${number(dailyLog.water) >= (i + 1) * 250 ? " filled" : ""}`} />
-                ))}
-              </div>
-              <button className="water-add" onClick={() => addWater(250)}>+250 ml</button>
-            </div>
-
-            {/* Streak */}
-            {streak > 0 && (
-              <div className="streak-pill">
-                <span className="streak-count">🔥{streak}</span>
-                <div className="streak-label">
-                  <strong>{streak === 1 ? "1 day streak" : `${streak}-day streak`}</strong>
-                  <span>Keep logging every day to grow it</span>
-                </div>
-                <div className="streak-dots">
-                  {Array.from({ length: Math.min(streak, 7) }).map((_, i) => (
-                    <div key={i} className={`streak-dot${i < streak ? " lit" : ""}`} />
+                <div className="water-dots">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <div key={i} className={`water-dot${number(dailyLog.water) >= (i + 1) * 250 ? " filled" : ""}`} />
                   ))}
                 </div>
+                <button className="water-add" onClick={() => addWater(250)}>+250 ml</button>
               </div>
-            )}
 
-            {/* Activity card */}
-            <ActivityCard dailyLog={dailyLog} patchDailyLog={patchDailyLog} />
+              {/* Activity card */}
+              <ActivityCard dailyLog={dailyLog} patchDailyLog={patchDailyLog} weightKg={data.profile.weight} />
 
-            {/* Meal sections */}
-            {MEALS.map((meal) => {
-              const mealItems = items.filter((e) => e.meal === meal);
-              const mealCals  = totalsFor(mealItems).calories;
-              return (
-                <details key={meal} className="meal-section" open={mealItems.length > 0}>
-                  <summary className="meal-header">
-                    <div className="meal-header-left">
-                      <div className="meal-icon">{MEAL_ICONS[meal]}</div>
-                      <div>
-                        <div className="meal-name">{meal}</div>
-                        <div className="meal-cal-count">{mealItems.length} item{mealItems.length !== 1 ? "s" : ""}</div>
+              {/* Weight progress strip */}
+              <div className="weight-strip">
+                {startW && curW ? (
+                  <>
+                    <div className="weight-strip-numbers">
+                      <div className="weight-strip-stat"><strong>{startW} kg</strong><span>Start</span></div>
+                      <div className="weight-strip-progress">
+                        <div className="weight-strip-bar-track">
+                          <div className="weight-strip-bar-fill" style={{ width: `${journeyPct}%` }} />
+                          <div className="weight-strip-marker" style={{ left: `${journeyPct}%` }}>{curW} kg</div>
+                        </div>
+                        <div className="weight-strip-bar-labels">
+                          <span>Start {startW} kg</span>
+                          {goalW ? <span>Goal {goalW} kg</span> : null}
+                        </div>
                       </div>
+                      {goalW ? <div className="weight-strip-stat right"><strong>{goalW} kg</strong><span>Goal</span></div> : null}
                     </div>
-                    <div className="meal-header-right">
-                      {mealItems.length > 0 && <span className="meal-total-cal">{Math.round(mealCals)} kcal</span>}
-                      <ChevronRight size={16} className="meal-chevron" />
-                    </div>
-                  </summary>
-                  {mealItems.length > 0 ? mealItems.map((item) => (
-                    <div key={item.id} className="food-item">
-                      <div className="food-info">
-                        <span className="food-name">{item.name}</span>
-                        <span className="food-sub">{item.grams}g{item.brand ? ` · ${item.brand}` : ""}</span>
-                      </div>
-                      <span className="food-cal">{Math.round(item.calories)}</span>
-                      <button className="food-delete" aria-label="Remove food" onClick={() => removeFood(item.id)}>
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="1" y1="1" x2="13" y2="13"/><line x1="13" y1="1" x2="1" y2="13"/></svg>
-                      </button>
-                    </div>
-                  )) : (
-                    <p className="meal-empty">No {meal.toLowerCase()} logged yet</p>
-                  )}
-                </details>
-              );
-            })}
-          </>
-        )}
+                    <p className="weight-strip-motivation">{motivational}</p>
+                  </>
+                ) : (
+                  <p className="weight-strip-motivation" style={{ textAlign: "center" }}>
+                    Log your weight in <strong style={{ color: "var(--accent)" }}>Me → Profile</strong> to see your journey here.
+                  </p>
+                )}
+              </div>
+
+              {/* Streak */}
+              {streak > 0 && (
+                <div className="streak-pill">
+                  <span className="streak-count">🔥{streak}</span>
+                  <div className="streak-label">
+                    <strong>{streak === 1 ? "1 day streak" : `${streak}-day streak`}</strong>
+                    <span>Keep logging every day to grow it</span>
+                  </div>
+                  <div className="streak-dots">
+                    {Array.from({ length: Math.min(streak, 7) }).map((_, i) => (
+                      <div key={i} className={`streak-dot${i < streak ? " lit" : ""}`} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          );
+        })()}
 
         {/* ═══ LOG ═══ */}
         {tab === "add" && (
