@@ -9,14 +9,13 @@ import {
 import {
   cacheFoodResult,
   checkSupabaseConnection,
-  createAccountWithPassword,
   enableCloudSync,
   getCurrentSession,
   optimizeImage,
   pullRemoteData,
   readSyncStatus,
   searchFoodCache,
-  signInWithPassword,
+  sendMagicLink,
   signOut,
   subscribeToAuthChanges,
   supabaseConfig,
@@ -283,15 +282,13 @@ function WeightJourneyCard({ entries, highestWeight, currentWeight, goalWeight: 
 
 /* ───────────────────────── LockScreen ───────────────────────── */
 function LockScreen({ mode, onUnlock, onSetup, owner }) {
-  const [authTab, setAuthTab]               = useState("signin");
-  const [email, setEmail]                   = useState("");
-  const [password, setPassword]             = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [pin, setPin]                       = useState("");
-  const [confirm, setConfirm]               = useState("");
-  const [error, setError]                   = useState("");
-  const [status, setStatus]                 = useState("");
-  const [busy, setBusy]                     = useState(false);
+  const [email, setEmail]   = useState("");
+  const [pin, setPin]       = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError]   = useState("");
+  const [status, setStatus] = useState("");
+  const [busy, setBusy]     = useState(false);
+  const [sent, setSent]     = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -305,17 +302,17 @@ function LockScreen({ mode, onUnlock, onSetup, owner }) {
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setError("Enter a valid email address.");
-    if (password.length < 8) return setError("Password must be at least 8 characters.");
-    if (authTab === "signup" && password !== confirmPassword) return setError("Passwords don't match.");
     if (!/^\d{4,8}$/.test(pin)) return setError("Local PIN must be 4–8 digits.");
-    if (authTab === "signup" && pin !== confirm) return setError("Local PINs don't match.");
+    if (pin !== confirm) return setError("PINs don't match.");
     setBusy(true);
-    const ok = await onSetup({ pin, email: email.trim(), password, authTab, onStatus: (msg) => setStatus(msg) });
+    setStatus("Sending magic link…");
+    const linkResult = await sendMagicLink(email.trim());
+    if (!linkResult.ok) { setBusy(false); setStatus(""); return setError(linkResult.error || "Could not send magic link."); }
+    setSent(true);
+    const ok = await onSetup({ pin, email: email.trim(), onStatus: (msg) => setStatus(msg) });
     setBusy(false);
     setStatus("");
-    if (!ok) setError(authTab === "signin"
-      ? "Wrong email or password. If you're new, use Sign Up."
-      : "Could not create account. That email may already be registered — try Sign In.");
+    if (!ok) setError("Setup failed. Please try again.");
   };
 
   return (
@@ -331,31 +328,25 @@ function LockScreen({ mode, onUnlock, onSetup, owner }) {
             {error && <div className="form-error" role="alert">{error}</div>}
             {busy && <div className="pin-hashing-status" role="status"><span className="pin-spinner" /><span>Verifying…</span></div>}
             <button className="primary" type="submit" disabled={busy}>Unlock</button>
-            <p className="lock-switch-hint">New device? <a href="#" onClick={(e) => { e.preventDefault(); localStorage.removeItem("caltrack.v2.security"); window.location.reload(); }}>Sign in with email + password</a></p>
+            <p className="lock-switch-hint">New device? <a href="#" onClick={(e) => { e.preventDefault(); localStorage.removeItem("caltrack.v2.security"); window.location.reload(); }}>Set up on this device</a></p>
+          </>
+        ) : sent ? (
+          <>
+            <h1>Check your email</h1>
+            <p className="lock-subtext">A magic link was sent to <strong>{email}</strong>. Click it to verify, then come back to this tab — you'll be signed in automatically.</p>
+            <p className="lock-subtext" style={{marginTop:8, opacity:.6}}>Your PIN is saved on this device. You only need the magic link once per new device.</p>
           </>
         ) : (
           <>
             <h1>PULSE</h1>
-            <div className="auth-tabs">
-              <button type="button" className={authTab === "signin" ? "active" : ""} onClick={() => { setAuthTab("signin"); setError(""); setConfirm(""); setConfirmPassword(""); }}>Sign In</button>
-              <button type="button" className={authTab === "signup" ? "active" : ""} onClick={() => { setAuthTab("signup"); setError(""); }}>Sign Up</button>
-            </div>
-            <p className="lock-subtext">
-              {authTab === "signin" ? "Welcome back. Enter your account password then set a local PIN." : "Create your account. Use the same email + password on every device."}
-            </p>
+            <p className="lock-subtext">Enter your email and choose a PIN. We'll send a magic link to verify your email — no password needed.</p>
             <Field label="Email" type="email" inputMode="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={busy} />
-            <Field label="Account password" type="password" autoComplete={authTab === "signup" ? "new-password" : "current-password"} value={password} onChange={(e) => setPassword(e.target.value)} disabled={busy} />
-            {authTab === "signup" && (
-              <Field label="Confirm password" type="password" autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} disabled={busy} />
-            )}
             <Field label="Local unlock PIN (4–8 digits)" type="password" inputMode="numeric" autoComplete="new-password" maxLength="8" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} disabled={busy} />
-            {authTab === "signup" && (
-              <Field label="Confirm local PIN" type="password" inputMode="numeric" autoComplete="new-password" maxLength="8" value={confirm} onChange={(e) => setConfirm(e.target.value.replace(/\D/g, ""))} disabled={busy} />
-            )}
+            <Field label="Confirm PIN" type="password" inputMode="numeric" autoComplete="new-password" maxLength="8" value={confirm} onChange={(e) => setConfirm(e.target.value.replace(/\D/g, ""))} disabled={busy} />
             {error && <div className="form-error" role="alert">{error}</div>}
             {busy && <div className="pin-hashing-status" role="status"><span className="pin-spinner" /><span>{status || "Please wait…"}</span></div>}
             <button className="primary" type="submit" disabled={busy}>
-              {busy ? (status || "Please wait…") : (authTab === "signin" ? "Sign In" : "Create Account")}
+              {busy ? (status || "Please wait…") : "Continue"}
             </button>
           </>
         )}
@@ -927,38 +918,22 @@ function AppV2Inner() {
 
   function dismissOnboarding() { localStorage.setItem("caltrack.v2.onboarding", "dismissed"); setOnboardingDismissed(true); }
 
-  async function setupPin({ pin, email = "", password = "", authTab = "signin", onStatus = () => {} }) {
-    if (!supabaseConfig.configured || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      const next = await hashPin(pin);
-      const record = { ...next, owner: email || "" };
-      localStorage.setItem(SECURITY_KEY, JSON.stringify(record));
-      setSecurity(record); setLocked(false); return true;
-    }
-    let session = null;
-    if (authTab === "signin") {
-      onStatus("Signing in…");
-      const result = await signInWithPassword(email, password);
-      if (!result.ok) return false;
-      session = result.session;
-    } else {
-      onStatus("Creating your account…");
-      const result = await createAccountWithPassword(email, password);
-      if (!result.ok) return false;
-      if (result.needsConfirmation) return false;
-      session = result.session;
-    }
-    if (session) {
-      onStatus("Syncing your data…");
-      try {
-        setCloudSession(session); cloudLoadedUser.current = session.user.id; enableCloudSync();
-        const merged = await syncCalTrack(loadData(), session); applyRemoteData(merged);
-      } catch { /* non-fatal */ }
-    }
-    onStatus("Almost done…");
+  async function setupPin({ pin, email = "", onStatus = () => {} }) {
+    onStatus("Saving PIN…");
     const next = await hashPin(pin);
     const record = { ...next, owner: email };
     localStorage.setItem(SECURITY_KEY, JSON.stringify(record));
-    setSecurity(record); setLocked(false); return true;
+    setSecurity(record);
+    // Cloud session may arrive later via magic link click — handled by subscribeToAuthChanges
+    const existingSession = await getCurrentSession().catch(() => null);
+    if (existingSession) {
+      onStatus("Syncing your data…");
+      try {
+        setCloudSession(existingSession); cloudLoadedUser.current = existingSession.user.id; enableCloudSync();
+        const merged = await syncCalTrack(loadData(), existingSession); applyRemoteData(merged);
+      } catch { /* non-fatal */ }
+    }
+    setLocked(false); return true;
   }
 
   async function unlock(pin) {

@@ -100,33 +100,8 @@ export async function getCurrentSession() {
   return { ...data.session, user: userResult.data.user };
 }
 
-export async function sendMagicLink(email) {
+export async function signInWithPassword(email, password) {
   assertConfigured();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Enter a valid email address.");
-  try {
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: window.location.href.split("#")[0],
-        shouldCreateUser: true,
-      },
-    });
-    throwIfError(error, "Could not send sign-in link.");
-  } catch (error) {
-    throw friendlySupabaseError(error);
-  }
-}
-
-// Derive a stable Supabase password from email + PIN.
-// Same email + PIN on any device → same credentials → same account.
-function deriveCloudPassword(email, pin) {
-  const e = email.toLowerCase().trim().split("").reverse().join("");
-  return `pulse_${e}_${pin}_v1`;
-}
-
-export async function signInWithPin(email, pin) {
-  assertConfigured();
-  const password = deriveCloudPassword(email, pin);
   try {
     const { data, error } = await supabase.auth.signInWithPassword({ email: email.toLowerCase().trim(), password });
     if (error) return { ok: false, error: error.message };
@@ -136,9 +111,8 @@ export async function signInWithPin(email, pin) {
   }
 }
 
-export async function createAccountWithPin(email, pin) {
+export async function createAccountWithPassword(email, password) {
   assertConfigured();
-  const password = deriveCloudPassword(email, pin);
   try {
     const { data, error } = await supabase.auth.signUp({ email: email.toLowerCase().trim(), password });
     if (error) return { ok: false, error: error.message };
@@ -148,28 +122,24 @@ export async function createAccountWithPin(email, pin) {
   }
 }
 
-// Call this when the user is already authenticated (e.g. via magic link) and we
-// want to stamp their PIN as the account password so any device can sign in with
-// email + PIN going forward.
-export async function setPasswordForPin(pin) {
-  if (!supabase) return { ok: false };
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return { ok: false, error: "Not authenticated" };
-    const { data: { user }, error } = await supabase.auth.updateUser({
-      password: deriveCloudPassword(session.user.email, pin),
-    });
-    if (error) return { ok: false, error: error.message };
-    return { ok: true, user };
-  } catch (error) {
-    return { ok: false, error: String(error?.message || error) };
-  }
-}
-
 export async function signOut() {
   if (!supabase) return;
   const { error } = await supabase.auth.signOut();
   throwIfError(error, "Could not sign out.");
+}
+
+export async function sendMagicLink(email) {
+  assertConfigured();
+  try {
+    const { error } = await supabase.auth.signInWithOtp({
+      email: email.toLowerCase().trim(),
+      options: { shouldCreateUser: true },
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: String(error?.message || error) };
+  }
 }
 
 function idsFor(data) {
@@ -659,6 +629,32 @@ function mergeById(localRows, remoteRows) {
   return [...merged.values()];
 }
 
+function mergeDailyLog(localLog = {}, remoteLog = {}) {
+  const localActivities = Array.isArray(localLog.activities) ? localLog.activities : [];
+  const remoteActivities = Array.isArray(remoteLog.activities) ? remoteLog.activities : [];
+  const localMeds = Array.isArray(localLog.medsTaken) ? localLog.medsTaken : [];
+  const remoteMeds = Array.isArray(remoteLog.medsTaken) ? remoteLog.medsTaken : [];
+  const localFlags = localLog.healthFlags && !Array.isArray(localLog.healthFlags) ? localLog.healthFlags : {};
+  const remoteFlags = remoteLog.healthFlags && !Array.isArray(remoteLog.healthFlags) ? remoteLog.healthFlags : {};
+  return {
+    ...remoteLog,
+    ...localLog,
+    water: Math.max(number(localLog.water), number(remoteLog.water)),
+    coffees: Math.max(number(localLog.coffees), number(remoteLog.coffees)),
+    notes: localLog.notes || remoteLog.notes || "",
+    activities: mergeById(localActivities, remoteActivities),
+    medsTaken: [...new Set([...remoteMeds, ...localMeds])],
+    healthFlags: { ...remoteFlags, ...localFlags },
+  };
+}
+
+function mergeDailyLogs(localLogs = {}, remoteLogs = {}) {
+  const dates = new Set([...Object.keys(localLogs), ...Object.keys(remoteLogs)]);
+  const logs = {};
+  for (const logDate of dates) logs[logDate] = mergeDailyLog(localLogs[logDate] || {}, remoteLogs[logDate] || {});
+  return logs;
+}
+
 function mergeData(localData, remoteData) {
   const diaryDates = new Set([...Object.keys(localData.diary || {}), ...Object.keys(remoteData.diary || {})]);
   const diary = {};
@@ -667,7 +663,7 @@ function mergeData(localData, remoteData) {
     ...localData,
     profile: { ...localData.profile, ...remoteData.profile },
     diary,
-    dailyLogs: { ...(localData.dailyLogs || {}), ...(remoteData.dailyLogs || {}) },
+    dailyLogs: mergeDailyLogs(localData.dailyLogs, remoteData.dailyLogs),
     measurements: mergeById(localData.measurements || [], remoteData.measurements || []),
     customFoods: mergeById(localData.customFoods || [], remoteData.customFoods || []),
     pantry: mergeById(localData.pantry || [], remoteData.pantry || []),
