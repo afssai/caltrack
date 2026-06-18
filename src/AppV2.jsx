@@ -1012,6 +1012,8 @@ function AppV2Inner() {
   const [authEmail, setAuthEmail] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [profileSaved, setProfileSaved] = useState(false);
+  const profileSaveTimer = useRef(null);
   const [online, setOnline] = useState(() => navigator.onLine);
   const [cloudHealth, setCloudHealth] = useState({ status: "unchecked", message: "Not checked yet." });
   const [onboardingDismissed, setOnboardingDismissed] = useState(
@@ -2976,7 +2978,7 @@ function AppV2Inner() {
 
         {tab === "settings" && (
           <section className="panel stack">
-            <div className="section-heading"><div><span className="eyebrow">Your profile</span><h2><User size={18} style={{verticalAlign:"middle",marginRight:6,color:"var(--accent-good)"}} />Settings</h2></div></div>
+            <div className="section-heading"><div><span className="eyebrow">Account</span><h2><User size={18} style={{verticalAlign:"middle",marginRight:6,color:"var(--accent-good)"}} aria-hidden="true" />Me</h2></div></div>
             <div className="today-log-card profile-shortcut-card">
               <div>
                 <span className="eyebrow violet">Home food ideas</span>
@@ -3044,17 +3046,24 @@ function AppV2Inner() {
                   {projectedWeeklyLoss > 0 && <div><span>Projected loss</span><strong>~{projectedWeeklyLoss} kg/week</strong></div>}
                 </div>
               )}
-              <button className="primary" onClick={() => {
-                const tdee = calcTDEE(data.profile);
-                if (!tdee) { flash("Fill in sex, age, height, and weight to auto-calculate."); return; }
-                const lean = calcLeanMass(data.profile);
-                const w = number(data.profile.weight);
-                const proteinG = lean ? Math.round(lean * 1.8) : Math.round(w * 1.8);
-                const fatG = Math.round(dailyTarget * 0.28 / 9);
-                const carbsG = Math.max(50, Math.round((dailyTarget - proteinG * 4 - fatG * 9) / 4));
-                setProfile({ calorieTarget: dailyTarget, proteinTarget: proteinG, carbsTarget: carbsG, fatTarget: fatG, fiberTarget: 30 });
-                flash("Targets calculated — protein based on lean mass.");
-              }}>Apply calculated targets</button>
+              <div className="profile-actions">
+                <button className="secondary" onClick={() => {
+                  const tdee = calcTDEE(data.profile);
+                  if (!tdee) { flash("Fill in sex, age, height, and weight to auto-calculate."); return; }
+                  const lean = calcLeanMass(data.profile);
+                  const w = number(data.profile.weight);
+                  const proteinG = lean ? Math.round(lean * 1.8) : Math.round(w * 1.8);
+                  const fatG = Math.round(dailyTarget * 0.28 / 9);
+                  const carbsG = Math.max(50, Math.round((dailyTarget - proteinG * 4 - fatG * 9) / 4));
+                  setProfile({ calorieTarget: dailyTarget, proteinTarget: proteinG, carbsTarget: carbsG, fatTarget: fatG, fiberTarget: 30 });
+                  flash("Targets calculated — protein based on lean mass.");
+                }}>Auto-calculate targets</button>
+                <button className={`primary${profileSaved ? " btn-saved" : ""}`} onClick={() => {
+                  if (profileSaveTimer.current) clearTimeout(profileSaveTimer.current);
+                  setProfileSaved(true);
+                  profileSaveTimer.current = setTimeout(() => setProfileSaved(false), 1800);
+                }}>{profileSaved ? "✓ Saved!" : "Save profile"}</button>
+              </div>
             </div>
 
             <div className="tool-card">
@@ -3159,14 +3168,14 @@ function AppV2Inner() {
         </div>
       )}
 
-      <nav className="bottom-nav" aria-label="Primary navigation">
+      <nav className="bottom-nav" role="tablist" aria-label="Primary navigation">
         {[
-          ["diary", "Today", <CalendarDays size={22} strokeWidth={1.8} />],
-          ["add", "Add", <Plus size={24} strokeWidth={2} />],
-          ["progress", "Progress", <Activity size={20} strokeWidth={1.8} />],
-          ["settings", "Profile", <User size={20} strokeWidth={1.8} />],
+          ["diary", "Today", <CalendarDays size={22} strokeWidth={1.8} aria-hidden="true" />],
+          ["add", "Log", <Plus size={24} strokeWidth={2} aria-hidden="true" />],
+          ["progress", "Progress", <Activity size={20} strokeWidth={1.8} aria-hidden="true" />],
+          ["settings", "Me", <User size={20} strokeWidth={1.8} aria-hidden="true" />],
         ].map(([key, label, icon]) => (
-          <button key={key} className={tab === key ? "active" : ""} onClick={() => setTab(key)}>
+          <button key={key} role="tab" aria-selected={tab === key} className={tab === key ? "active" : ""} onClick={() => setTab(key)}>
             <span className="nav-icon">{icon}</span>
             <span className="nav-label">{label}</span>
           </button>
@@ -3174,7 +3183,7 @@ function AppV2Inner() {
       </nav>
 
       {selectedFood && (
-        <div className="modal-backdrop" onClick={() => setSelectedFood(null)}>
+        <div className="modal-backdrop" role="presentation" onClick={() => setSelectedFood(null)}>
           <section className="modal" role="dialog" aria-modal="true" aria-labelledby="log-food-title" onClick={(event) => event.stopPropagation()}>
             <span className="eyebrow">Add to today</span>
             <h2 id="log-food-title">{cleanFoodName(selectedFood.name)}</h2>

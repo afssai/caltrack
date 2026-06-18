@@ -2619,3 +2619,46 @@ input:focus, select:focus, textarea:focus {
   border: 1px dashed rgba(255,255,255,.1);
   text-align: center;
 }
+
+/* ── Profile save row ── */
+.profile-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+.profile-actions .primary,
+.profile-actions .secondary {
+  flex: 1;
+  min-width: 120px;
+}
+.btn-saved {
+  background: linear-gradient(135deg, #00b86b, #00d278) !important;
+  box-shadow: 0 4px 16px rgba(0,210,120,.3) !important;
+}
+
+/* ── Accessibility: visible focus ring ── */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #ff4500;
+  outline-offset: 2px;
+}
+
+/* ── Min touch target for icon buttons ── */
+.bottom-nav button {
+  min-height: 44px;
+}
+button.icon-btn {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* ── Desktop: wider max-width for comfortable use ── */
+@media (min-width: 860px) {
+  .app-shell {
+    max-width: 520px;
+  }
+}

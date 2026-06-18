@@ -351,6 +351,8 @@ function localRows(data, userId) {
       highest_weight: data.profile.highestWeight === "" ? null : number(data.profile.highestWeight) || null,
       medical_conditions: data.profile.medicalConditions || "",
       medications: data.profile.medications || "",
+      goal_mode: data.profile.goalMode || "lose",
+      deficit_rate: number(data.profile.deficitRate) || 500,
     },
     diaryEntries: Object.entries(data.diary || {}).flatMap(([entryDate, entries]) =>
       (entries || []).map((entry) => ({
@@ -382,6 +384,7 @@ function localRows(data, userId) {
       activities: log.activities || [],
       health_flags: log.healthFlags || [],
       meds_taken: log.medsTaken || [],
+      coffees: number(log.coffees) || 0,
     })),
     measurements: (data.measurements || []).map((item) => ({
       user_id: userId,
@@ -389,6 +392,7 @@ function localRows(data, userId) {
       measured_date: item.date,
       weight: item.weight === "" ? null : number(item.weight),
       waist: item.waist === "" ? null : number(item.waist),
+      neck: item.neck === "" ? null : number(item.neck) || null,
     })),
     customFoods: (data.customFoods || []).map((food) => ({
       user_id: userId,
@@ -511,6 +515,8 @@ function remoteToLocal(rows, currentData) {
         highestWeight: profileRow.highest_weight ?? currentData.profile.highestWeight ?? "",
         medicalConditions: profileRow.medical_conditions || currentData.profile.medicalConditions || "",
         medications: profileRow.medications || currentData.profile.medications || "",
+        goalMode: profileRow.goal_mode || currentData.profile.goalMode || "lose",
+        deficitRate: number(profileRow.deficit_rate) || currentData.profile.deficitRate || 500,
       }
     : currentData.profile;
 
@@ -536,8 +542,8 @@ function remoteToLocal(rows, currentData) {
     };
     diary[entry.date] = [...(diary[entry.date] || []), entry];
   }
-  const dailyLogs = Object.fromEntries((rows.dailyLogs || []).map((row) => [row.log_date, { water: number(row.water_ml), notes: row.notes || "", activities: row.activities || [], healthFlags: row.health_flags || [], medsTaken: row.meds_taken || [] }]));
-  const measurements = (rows.measurements || []).map((row) => ({ id: row.local_id, date: row.measured_date, weight: row.weight ?? "", waist: row.waist ?? "" }));
+  const dailyLogs = Object.fromEntries((rows.dailyLogs || []).map((row) => [row.log_date, { water: number(row.water_ml), notes: row.notes || "", activities: row.activities || [], healthFlags: row.health_flags || [], medsTaken: row.meds_taken || [], coffees: number(row.coffees) || 0 }]));
+  const measurements = (rows.measurements || []).map((row) => ({ id: row.local_id, date: row.measured_date, weight: row.weight ?? "", waist: row.waist ?? "", neck: row.neck ?? "" }));
   const customFoods = (rows.customFoods || []).map((row) => ({
     id: row.local_id,
     name: row.name,
