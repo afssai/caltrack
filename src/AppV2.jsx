@@ -592,77 +592,80 @@ function ConfidenceBadge({ value = "manual" }) {
 }
 
 function LockScreen({ mode, onUnlock, onSetup, owner }) {
+  // mode="unlock" = this device already has a PIN stored, just verify it
+  // mode="setup"  = new device, show Sign In / Sign Up tabs
+  const [authTab, setAuthTab] = useState("signin"); // "signin" | "signup"
+  const [email, setEmail] = useState("");
   const [pin, setPin] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [email, setEmail] = useState("");
   const [error, setError] = useState("");
-  const [status, setStatus] = useState(""); // loading message
-  const [isHashing, setIsHashing] = useState(false);
+  const [status, setStatus] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  const submit = async (event) => {
-    event.preventDefault();
+  const submit = async (e) => {
+    e.preventDefault();
+    setError("");
+    // ── Existing device: just check PIN ──
     if (mode === "unlock") {
-      if (!/^\d{4,8}$/.test(pin)) return setError("Use a 4-8 digit PIN.");
-      setIsHashing(true);
-      setError("");
+      if (!/^\d{4,8}$/.test(pin)) return setError("Enter your 4–8 digit PIN.");
+      setBusy(true);
       const ok = await onUnlock(pin);
-      setIsHashing(false);
-      if (!ok) setError("Incorrect PIN. Try again.");
+      setBusy(false);
+      if (!ok) setError("Wrong PIN. Try again.");
       return;
     }
-    // setup mode
+    // ── New device: Sign In or Sign Up ──
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setError("Enter a valid email address.");
-    if (!/^\d{4,8}$/.test(pin)) return setError("Use a 4-8 digit PIN.");
-    if (pin !== confirm) return setError("PINs don't match.");
-    setIsHashing(true);
-    setError("");
-    setStatus("Connecting to your account…");
-    const ok = await onSetup(pin, email.trim(), (msg) => setStatus(msg));
-    setIsHashing(false);
+    if (!/^\d{4,8}$/.test(pin)) return setError("PIN must be 4–8 digits.");
+    if (authTab === "signup" && pin !== confirm) return setError("PINs don't match.");
+    setBusy(true);
+    const ok = await onSetup(pin, email.trim(), authTab, (msg) => setStatus(msg));
+    setBusy(false);
     setStatus("");
-    if (!ok) setError("Could not sign in. Check your email and PIN and try again.");
+    if (!ok) {
+      setError(authTab === "signin"
+        ? "Wrong email or PIN. If you're new, use Sign Up."
+        : "Could not create account. That email may already be registered — try Sign In.");
+    }
   };
 
   return (
     <div className="lock-shell">
       <form className="lock-card" onSubmit={submit}>
         <img src={logo1Src} alt="PULSE" className="brand-logo lock-logo" />
-        <h1>{mode === "setup" ? "Sign in to PULSE" : "Welcome back"}</h1>
-        {mode === "unlock" && owner && (
-          <p className="lock-owner">🔒 {owner}</p>
-        )}
-        <p className="lock-subtext">
-          {mode === "setup"
-            ? "Enter your email and a PIN. Same email + PIN on any device opens your data."
-            : "Enter your PIN to unlock."}
-        </p>
 
-        {mode === "setup" && (
-          <Field label="Your email" type="email" inputMode="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={isHashing} />
-        )}
-        <Field label="PIN (4–8 digits)" type="password" inputMode="numeric" autoComplete="current-password" maxLength="8" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} disabled={isHashing} />
-        {mode === "setup" && (
-          <Field label="Confirm PIN" type="password" inputMode="numeric" autoComplete="new-password" maxLength="8" value={confirm} onChange={(e) => setConfirm(e.target.value.replace(/\D/g, ""))} disabled={isHashing} />
-        )}
-
-        {error && <div className="form-error" role="alert">{error}</div>}
-        {isHashing && (
-          <div className="pin-hashing-status" role="status" aria-live="polite">
-            <span className="pin-spinner" aria-hidden="true" />
-            <span>{status || (mode === "setup" ? "Setting up…" : "Verifying…")}</span>
-          </div>
-        )}
-
-        <button className="primary" type="submit" disabled={isHashing}>
-          {isHashing
-            ? (status || "Please wait…")
-            : (mode === "setup" ? "Open my PULSE" : "Unlock")}
-        </button>
-
-        {mode === "unlock" && (
-          <p className="lock-switch-hint">
-            New device? <a href="#" onClick={(e) => { e.preventDefault(); window.location.reload(); }}>Use a different account</a>
-          </p>
+        {mode === "unlock" ? (
+          <>
+            <h1>Welcome back</h1>
+            {owner && <p className="lock-owner">{owner}</p>}
+            <p className="lock-subtext">Enter your PIN to unlock.</p>
+            <Field label="PIN" type="password" inputMode="numeric" autoComplete="current-password" maxLength="8" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} disabled={busy} />
+            {error && <div className="form-error" role="alert">{error}</div>}
+            {busy && <div className="pin-hashing-status" role="status"><span className="pin-spinner" /><span>Verifying…</span></div>}
+            <button className="primary" type="submit" disabled={busy}>Unlock</button>
+            <p className="lock-switch-hint">Different account? <a href="#" onClick={(e) => { e.preventDefault(); localStorage.removeItem("caltrack.v2.security"); window.location.reload(); }}>Sign in with another email</a></p>
+          </>
+        ) : (
+          <>
+            <h1>PULSE</h1>
+            <div className="auth-tabs">
+              <button type="button" className={authTab === "signin" ? "active" : ""} onClick={() => { setAuthTab("signin"); setError(""); setConfirm(""); }}>Sign In</button>
+              <button type="button" className={authTab === "signup" ? "active" : ""} onClick={() => { setAuthTab("signup"); setError(""); }}>Sign Up</button>
+            </div>
+            <p className="lock-subtext">
+              {authTab === "signin" ? "Welcome back. Enter your email and PIN." : "Create your account. Use the same email + PIN on any device."}
+            </p>
+            <Field label="Email" type="email" inputMode="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={busy} />
+            <Field label="PIN (4–8 digits)" type="password" inputMode="numeric" autoComplete={authTab === "signup" ? "new-password" : "current-password"} maxLength="8" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} disabled={busy} />
+            {authTab === "signup" && (
+              <Field label="Confirm PIN" type="password" inputMode="numeric" autoComplete="new-password" maxLength="8" value={confirm} onChange={(e) => setConfirm(e.target.value.replace(/\D/g, ""))} disabled={busy} />
+            )}
+            {error && <div className="form-error" role="alert">{error}</div>}
+            {busy && <div className="pin-hashing-status" role="status"><span className="pin-spinner" /><span>{status || "Please wait…"}</span></div>}
+            <button className="primary" type="submit" disabled={busy}>
+              {busy ? (status || "Please wait…") : (authTab === "signin" ? "Sign In" : "Create Account")}
+            </button>
+          </>
         )}
       </form>
     </div>
@@ -1317,49 +1320,51 @@ function AppV2Inner() {
     setOnboardingDismissed(true);
   }
 
-  async function setupPin(pin, email = "", onStatus = () => {}) {
-    // 1. Try to sign in with existing account (same email+PIN = same account on any device)
-    if (supabaseConfig.configured && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      onStatus("Signing in to your account…");
-      let session = null;
-      const signInResult = await signInWithPin(email, pin);
-      if (signInResult.ok) {
-        session = signInResult.session;
-      } else {
-        // Account doesn't exist yet — create it
-        onStatus("Creating your account…");
-        const signUpResult = await createAccountWithPin(email, pin);
-        if (signUpResult.ok && !signUpResult.needsConfirmation) {
-          session = signUpResult.session;
-        } else if (signUpResult.needsConfirmation) {
-          // Email confirmation is still on in Supabase — instruct user to turn it off
-        }
-      }
-
-      if (session) {
-        // Pull remote data and merge with any local data
-        onStatus("Loading your data…");
-        try {
-          setCloudSession(session);
-          cloudLoadedUser.current = session.user.id;
-          enableCloudSync();
-          const remoteData = await pullRemoteData(loadData());
-          if (remoteData) {
-            setData((current) => mergeAccountData(current, remoteData));
-          }
-        } catch {
-          // Non-fatal — use whatever local data exists
-        }
-      }
+  async function setupPin(pin, email = "", authTab = "signin", onStatus = () => {}) {
+    if (!supabaseConfig.configured || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      // No Supabase — local only
+      const next = await hashPin(pin);
+      const record = { ...next, owner: email || "" };
+      localStorage.setItem(SECURITY_KEY, JSON.stringify(record));
+      setSecurity(record); setLocked(false);
+      return true;
     }
 
-    // 2. Store PIN hash locally (always)
-    onStatus("Securing your PIN…");
+    let session = null;
+
+    if (authTab === "signin") {
+      onStatus("Signing in…");
+      const result = await signInWithPin(email, pin);
+      if (!result.ok) return false; // wrong email or PIN — tell user
+      session = result.session;
+    } else {
+      // signup
+      onStatus("Creating your account…");
+      const result = await createAccountWithPin(email, pin);
+      if (!result.ok) return false;
+      if (result.needsConfirmation) {
+        // "Confirm email" is still ON in Supabase — can't proceed
+        return false;
+      }
+      session = result.session;
+    }
+
+    if (session) {
+      onStatus("Loading your data…");
+      try {
+        setCloudSession(session);
+        cloudLoadedUser.current = session.user.id;
+        enableCloudSync();
+        const remoteData = await pullRemoteData(loadData());
+        if (remoteData) setData((current) => mergeAccountData(current, remoteData));
+      } catch { /* non-fatal */ }
+    }
+
+    onStatus("Almost done…");
     const next = await hashPin(pin);
-    const record = { ...next, owner: email || data.profile.name || "" };
+    const record = { ...next, owner: email };
     localStorage.setItem(SECURITY_KEY, JSON.stringify(record));
-    setSecurity(record);
-    setLocked(false);
+    setSecurity(record); setLocked(false);
     return true;
   }
 

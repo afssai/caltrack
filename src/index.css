@@ -2674,3 +2674,27 @@ button.icon-btn {
   color: var(--accent);
   text-decoration: none;
 }
+.auth-tabs {
+  display: flex;
+  background: var(--surface2);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 3px;
+  margin: 4px 0 8px;
+}
+.auth-tabs button {
+  flex: 1;
+  padding: 8px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.auth-tabs button.active {
+  background: var(--accent);
+  color: #fff;
+}
