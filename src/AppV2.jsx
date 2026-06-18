@@ -15,6 +15,7 @@ import {
   readSyncStatus,
   searchFoodCache,
   sendMagicLink,
+  setPasswordForPin,
   signInWithPin,
   signOut,
   subscribeToAuthChanges,
@@ -1371,17 +1372,24 @@ function AppV2Inner() {
     const ok = candidate.hash === security.hash;
     if (!ok) return false;
     setLocked(false);
-    // If we have an email stored and Supabase is configured, sign in and pull data
+
     const email = security.owner;
-    if (supabaseConfig.configured && email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && !cloudSession) {
+    if (supabaseConfig.configured && email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       try {
-        const result = await signInWithPin(email, pin);
-        if (result.ok && result.session) {
-          setCloudSession(result.session);
-          cloudLoadedUser.current = result.session.user.id;
-          enableCloudSync();
-          const remoteData = await pullRemoteData(loadData());
-          if (remoteData) setData((current) => mergeAccountData(current, remoteData));
+        if (cloudSession) {
+          // Already signed in (e.g. via magic link) — stamp PIN as password so
+          // any other device can sign in with email + PIN from now on.
+          await setPasswordForPin(pin);
+        } else {
+          // Try to sign in with the derived password.
+          const result = await signInWithPin(email, pin);
+          if (result.ok && result.session) {
+            setCloudSession(result.session);
+            cloudLoadedUser.current = result.session.user.id;
+            enableCloudSync();
+            const remoteData = await pullRemoteData(loadData());
+            if (remoteData) setData((current) => mergeAccountData(current, remoteData));
+          }
         }
       } catch { /* non-fatal — app is already unlocked */ }
     }

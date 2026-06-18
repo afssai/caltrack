@@ -142,8 +142,25 @@ export async function createAccountWithPin(email, pin) {
   try {
     const { data, error } = await supabase.auth.signUp({ email: email.toLowerCase().trim(), password });
     if (error) return { ok: false, error: error.message };
-    // If email confirmation is required, session will be null
     return { ok: true, session: data.session, needsConfirmation: !data.session };
+  } catch (error) {
+    return { ok: false, error: String(error?.message || error) };
+  }
+}
+
+// Call this when the user is already authenticated (e.g. via magic link) and we
+// want to stamp their PIN as the account password so any device can sign in with
+// email + PIN going forward.
+export async function setPasswordForPin(pin) {
+  if (!supabase) return { ok: false };
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return { ok: false, error: "Not authenticated" };
+    const { data: { user }, error } = await supabase.auth.updateUser({
+      password: deriveCloudPassword(session.user.email, pin),
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, user };
   } catch (error) {
     return { ok: false, error: String(error?.message || error) };
   }
