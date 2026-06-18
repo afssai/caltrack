@@ -149,7 +149,9 @@ input:hover, select:hover { border-color: var(--border2); }
   padding: 10px 16px; border-radius: 14px; font-size: 13px; font-weight: 600;
   background: rgba(255,140,0,.10); border: 1px solid rgba(255,140,0,.2);
   color: var(--text2); margin-bottom: 10px; width: 100%; box-sizing: border-box;
+  cursor: pointer; text-align: left;
 }
+.streak-pill:active { opacity: .8; }
 .streak-pill .streak-count {
   font-size: 22px; font-weight: 800; color: #ff8c00; line-height: 1;
 }
@@ -258,12 +260,30 @@ input:hover, select:hover { border-color: var(--border2); }
 }
 .activity-picker { margin-top: 4px; }
 .activity-durations { display: flex; gap: 6px; margin-bottom: 10px; }
-.duration-btn {
-  flex: 1; background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 10px; padding: 8px 4px; font-size: 12px; font-weight: 600; color: var(--text2);
+/* duration slider */
+.duration-slider-wrap { margin-bottom: 8px; }
+.duration-slider-labels {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 8px; font-size: 13px; color: var(--text2);
 }
-.duration-btn.active {
-  background: rgba(0,210,120,.15); border-color: rgba(0,210,120,.4); color: #00d278;
+.duration-value { font-size: 20px; font-weight: 800; color: #00d278; }
+.duration-slider {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 6px; border-radius: 3px; outline: none;
+  background: linear-gradient(90deg, #00d278 var(--pct, 21%), var(--surface2) var(--pct, 21%));
+  cursor: pointer;
+}
+.duration-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%;
+  background: #00d278; border: 3px solid var(--bg); box-shadow: 0 0 0 2px #00d278;
+}
+.duration-slider::-moz-range-thumb {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #00d278; border: 3px solid var(--bg);
+}
+.duration-slider-ticks {
+  display: flex; justify-content: space-between;
+  font-size: 10px; color: var(--text3); margin-top: 4px;
 }
 .activity-kcal-preview {
   font-size: 12px; color: var(--text3); margin: 0 0 6px; text-align: center;
@@ -301,6 +321,37 @@ input:hover, select:hover { border-color: var(--border2); }
 .bodyfat-bar-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #00d278, #ff8c00, #ff4500); }
 .bodyfat-bar-labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--text3); }
 .bodyfat-hint { font-size: 11px; color: var(--text3); line-height: 1.5; margin-top: 8px; }
+
+/* ═══════════════════════════════════════════
+   TODAY'S LOG (collapsible)
+═══════════════════════════════════════════ */
+.todays-log-section {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 16px; margin-bottom: 10px; overflow: hidden;
+}
+.todays-log-summary {
+  list-style: none; display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--text);
+}
+.todays-log-summary::-webkit-details-marker { display: none; }
+.todays-log-meta { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text3); font-weight: 500; }
+.todays-log-section[open] .meal-chevron { transform: rotate(90deg); }
+.meal-chevron { transition: transform .2s; }
+.todays-log-body { padding: 0 16px 14px; }
+.todays-log-meal { margin-bottom: 12px; }
+.todays-log-meal-header {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 12px; font-weight: 700; color: var(--text2);
+  padding: 6px 0 4px; border-bottom: 1px solid var(--border); margin-bottom: 6px;
+  text-transform: uppercase; letter-spacing: .4px;
+}
+.todays-log-meal-cal { color: var(--accent); }
+.todays-log-item {
+  display: flex; align-items: center; gap: 8px; padding: 5px 0;
+}
+.todays-log-item-name { flex: 1; font-size: 13px; color: var(--text); }
+.todays-log-item-cal { font-size: 13px; font-weight: 600; color: var(--text2); }
+.todays-log-empty { font-size: 13px; color: var(--text3); text-align: center; padding: 10px 0; }
 
 /* ═══════════════════════════════════════════
    MEAL SECTIONS (Today)

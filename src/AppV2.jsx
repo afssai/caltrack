@@ -294,7 +294,6 @@ const ACTIVITY_PRESETS = [
   { name: "Yoga",    icon: "🧘", met: 2.5 },
   { name: "Other",   icon: "➕", met: null },
 ];
-const DURATIONS = [15, 30, 45, 60];
 
 function ActivityCard({ dailyLog, patchDailyLog, weightKg }) {
   const [selected, setSelected]   = useState(null);
@@ -359,23 +358,32 @@ function ActivityCard({ dailyLog, patchDailyLog, weightKg }) {
         ))}
       </div>
 
-      {/* Duration or custom form */}
+      {/* Duration slider or custom form */}
       {selected && (
         <div className="activity-picker">
           {selected.met ? (
             <>
-              <div className="activity-durations">
-                {DURATIONS.map((d) => (
-                  <button key={d}
-                    className={`duration-btn${duration === d ? " active" : ""}`}
-                    onClick={() => setDuration(d)}>{d} min</button>
-                ))}
+              <div className="duration-slider-wrap">
+                <div className="duration-slider-labels">
+                  <span>{selected.icon} {selected.name}</span>
+                  <strong className="duration-value">{duration} min</strong>
+                </div>
+                <input
+                  type="range" min="5" max="120" step="5"
+                  value={duration}
+                  onChange={(e) => setDuration(Number(e.target.value))}
+                  className="duration-slider"
+                  style={{ "--pct": `${((duration - 5) / 115) * 100}%` }}
+                />
+                <div className="duration-slider-ticks">
+                  <span>5</span><span>30</span><span>60</span><span>90</span><span>120</span>
+                </div>
               </div>
               {previewKcal !== null && (
-                <p className="activity-kcal-preview">≈ {previewKcal} kcal burned for {weight} kg</p>
+                <p className="activity-kcal-preview">≈ <strong style={{color:"#00d278"}}>{previewKcal} kcal</strong> burned · based on {weight} kg body weight</p>
               )}
-              <button className="primary" style={{ width: "100%", marginTop: 8 }} onClick={logActivity}>
-                Log {selected.name} {duration} min
+              <button className="primary" style={{ width: "100%", marginTop: 10 }} onClick={logActivity}>
+                Log {selected.name} {duration} min → −{previewKcal} kcal
               </button>
             </>
           ) : (
@@ -1507,20 +1515,56 @@ function AppV2Inner() {
                 )}
               </div>
 
-              {/* Streak */}
+              {/* Today's log — collapsible meal summary */}
+              <details className="todays-log-section">
+                <summary className="todays-log-summary">
+                  <span>📋 Today's Log</span>
+                  <span className="todays-log-meta">
+                    {items.length} item{items.length !== 1 ? "s" : ""} · {Math.round(totals.calories)} kcal
+                    <ChevronRight size={14} className="meal-chevron" />
+                  </span>
+                </summary>
+                <div className="todays-log-body">
+                  {MEALS.map((meal) => {
+                    const mealItems = items.filter((e) => e.meal === meal);
+                    if (!mealItems.length) return null;
+                    const mealCals = totalsFor(mealItems).calories;
+                    return (
+                      <div key={meal} className="todays-log-meal">
+                        <div className="todays-log-meal-header">
+                          <span>{MEAL_ICONS[meal]} {meal}</span>
+                          <span className="todays-log-meal-cal">{Math.round(mealCals)} kcal</span>
+                        </div>
+                        {mealItems.map((item) => (
+                          <div key={item.id} className="todays-log-item">
+                            <span className="todays-log-item-name">{item.name}</span>
+                            <span className="todays-log-item-cal">{Math.round(item.calories)}</span>
+                            <button className="food-delete" onClick={() => removeFood(item.id)} aria-label="Remove">
+                              <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="1" y1="1" x2="13" y2="13"/><line x1="13" y1="1" x2="1" y2="13"/></svg>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                  {items.length === 0 && <p className="todays-log-empty">No food logged yet today. Tap + to add.</p>}
+                </div>
+              </details>
+
+              {/* Streak — taps to Progress */}
               {streak > 0 && (
-                <div className="streak-pill">
+                <button className="streak-pill" onClick={() => setTab("progress")}>
                   <span className="streak-count">🔥{streak}</span>
                   <div className="streak-label">
                     <strong>{streak === 1 ? "1 day streak" : `${streak}-day streak`}</strong>
-                    <span>Keep logging every day to grow it</span>
+                    <span>Tap to see your full history →</span>
                   </div>
                   <div className="streak-dots">
                     {Array.from({ length: Math.min(streak, 7) }).map((_, i) => (
                       <div key={i} className={`streak-dot${i < streak ? " lit" : ""}`} />
                     ))}
                   </div>
-                </div>
+                </button>
               )}
             </>
           );
