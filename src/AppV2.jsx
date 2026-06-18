@@ -1350,11 +1350,13 @@ function AppV2Inner() {
     }
 
     if (session) {
-      onStatus("Loading your data…");
+      onStatus("Syncing your data…");
       try {
         setCloudSession(session);
         cloudLoadedUser.current = session.user.id;
         enableCloudSync();
+        // Push local data first (so phone data goes up), then pull everything back
+        await syncCalTrack(loadData(), { quiet: true });
         const remoteData = await pullRemoteData(loadData());
         if (remoteData) setData((current) => mergeAccountData(current, remoteData));
       } catch { /* non-fatal */ }
@@ -1378,22 +1380,23 @@ function AppV2Inner() {
     const email = security.owner;
     if (supabaseConfig.configured && email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       try {
-        if (cloudSession) {
-          // Already signed in (e.g. via magic link) — stamp PIN as password so
-          // any other device can sign in with email + PIN from now on.
-          await setPasswordForPin(pin);
-        } else {
-          // Try to sign in with the derived password.
+        let session = cloudSession;
+        if (!session) {
           const result = await signInWithPin(email, pin);
           if (result.ok && result.session) {
-            setCloudSession(result.session);
-            cloudLoadedUser.current = result.session.user.id;
+            session = result.session;
+            setCloudSession(session);
+            cloudLoadedUser.current = session.user.id;
             enableCloudSync();
-            const remoteData = await pullRemoteData(loadData());
-            if (remoteData) setData((current) => mergeAccountData(current, remoteData));
           }
         }
-      } catch { /* non-fatal — app is already unlocked */ }
+        if (session) {
+          // Full bidirectional sync: push local data then pull remote — keeps all devices identical
+          await syncCalTrack(loadData(), { quiet: true });
+          const remoteData = await pullRemoteData(loadData());
+          if (remoteData) setData((current) => mergeAccountData(current, remoteData));
+        }
+      } catch { /* non-fatal */ }
     }
     return true;
   }
