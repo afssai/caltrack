@@ -999,6 +999,7 @@ function AppV2Inner() {
   const [scanPreview, setScanPreview] = useState("");
   const [pendingLogFood, setPendingLogFood] = useState(null);
   const [scanMode, setScanMode] = useState("ai");
+  const [addSubMode, setAddSubMode] = useState("search"); // "search" | "scan"
   const [cylindrical, setCylindrical] = useState(false);
   const [mealDescription, setMealDescription] = useState("");
   const [aiDailyReview, setAiDailyReview] = useState("");
@@ -2388,7 +2389,7 @@ function AppV2Inner() {
                 <h2>{items.length ? `${items.length} food ${items.length === 1 ? "entry" : "entries"}` : "Nothing logged yet"}</h2>
                 <p>{Math.round(totals.calories)} kcal food · {waterOz || 0} oz water · {activityMinutes || 0} min activity</p>
               </div>
-              <button className="secondary compact" onClick={() => setTab("log")}>Open log</button>
+              <button className="secondary compact" onClick={() => setTab("add")}>+ Add food</button>
             </div>
 
             {!!coach.length && <details className="coach-card coach-pop">
@@ -2398,10 +2399,71 @@ function AppV2Inner() {
 
             <div className="ai-review-section">
               <button className="ai-review-fab" disabled={busy} onClick={getDailyAiReview}>
-                {busy ? "⏳ Reviewing…" : "🤖 Review today's intake with AI"}
+                {busy
+                  ? <><span className="ai-spinner" aria-hidden="true" /> Reviewing your intake…</>
+                  : "🤖 Review today's intake with AI"}
               </button>
             </div>
 
+          </section>
+        )}
+
+        {tab === "diary" && (
+          <section className="panel stack log-panel">
+            <div className="section-heading">
+              <div>
+                <span className="eyebrow crimson">{date === localDate() ? "Today" : date}</span>
+                <h2><BookOpen size={18} style={{verticalAlign:"middle",marginRight:6,color:"var(--accent-warm)"}} />Today's meals</h2>
+              </div>
+              <button className="primary compact" onClick={() => setTab("add")}>+ Add food</button>
+            </div>
+            {(dailyLog.activities || []).length > 0 && (
+              <div className="meal">
+                <div className="meal-heading">
+                  <strong><Flame size={13} style={{verticalAlign:"middle",marginRight:4}} />Activities</strong>
+                  <span>{activityCalories} kcal burned</span>
+                </div>
+                {(dailyLog.activities || []).map((act) => {
+                  const iconType = /swim/i.test(act.type) ? "swim" : /weight|strength/i.test(act.type) ? "weights" : "walk";
+                  return (
+                    <article className="food-row activity-row-log" key={act.id}>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <MiniIcon type={iconType} size={16} />
+                        <div>
+                          <strong>{act.type}</strong>
+                          <span><Timer size={11} style={{verticalAlign:"middle",marginRight:2}} />{act.minutes} min · ~{calcBurnedCalories(act.type, act.minutes, number(data.profile.weight))} kcal</span>
+                        </div>
+                      </div>
+                      <button className="icon-btn-sm" aria-label={`Remove ${act.type}`} onClick={() => removeActivity(act.id)}><Trash2 size={14} /></button>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+            {MEALS.map((meal) => {
+              const mealItems = items.filter((item) => item.meal === meal);
+              const mealTotal = totalsFor(mealItems);
+              return (
+                <div className="meal" key={meal}>
+                  <div className="meal-heading">
+                    <strong>{meal}</strong>
+                    <span>{Math.round(mealTotal.calories)} kcal</span>
+                  </div>
+                  {!mealItems.length && <button className="empty-meal" onClick={() => setTab("add")}><span>Add {meal.toLowerCase()}</span><b>+</b></button>}
+                  {mealItems.map((item) => (
+                    <article className="food-row" key={item.id}>
+                      <div>
+                        <strong>{item.name}</strong>
+                        <span>{item.grams}g · {item.brand || item.source}</span>
+                        <small>P {round(item.protein)} · C {round(item.carbs)} · F {round(item.fat)}</small>
+                      </div>
+                      <b>{Math.round(item.calories)}</b>
+                      <button className="icon-btn-sm" aria-label={`Remove ${item.name}`} onClick={() => removeFood(item.id)}><Trash2 size={14} /></button>
+                    </article>
+                  ))}
+                </div>
+              );
+            })}
           </section>
         )}
 
@@ -2482,65 +2544,84 @@ function AppV2Inner() {
 
         {tab === "add" && (
           <section className="panel stack add-panel">
-            <div className="section-heading">
+            <div className="add-mode-bar">
+              <button className={`add-mode-btn${addSubMode === "search" ? " active" : ""}`} onClick={() => setAddSubMode("search")}>
+                <Search size={16} strokeWidth={2} /> Search
+              </button>
+              <button className={`add-mode-btn${addSubMode === "scan" ? " active" : ""}`} onClick={() => { setAddSubMode("scan"); setScanPreview(""); setAiPhotoResult(""); setPendingLogFood(null); }}>
+                <ScanLine size={16} strokeWidth={2} /> Scan &amp; AI
+              </button>
+            </div>
+            {addSubMode === "search" && <div className="section-heading">
               <div><span className="eyebrow">Quick add</span><h2><Search size={18} style={{verticalAlign:"middle",marginRight:6,color:"var(--accent-good)"}} />What did you eat?</h2></div>
-              <button className="secondary compact" onClick={() => setTab("tools")}>Scan / AI</button>
-            </div>
-            <div className="search-line">
-              <input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && !busy && searchOpenFoodFacts()} placeholder="banana, fried eggs, chicken..." />
-              <button className="primary" disabled={busy} onClick={searchOpenFoodFacts}>Find</button>
-            </div>
-            <div className="barcode-line">
-              <input inputMode="numeric" value={barcode} onChange={(event) => setBarcode(event.target.value)} placeholder="Enter barcode digits" />
-              <button className="secondary" disabled={busy} onClick={lookupBarcode}>Look up barcode</button>
-            </div>
-            <p className="helper">Simple foods show once. Tap Add, choose amount, done.</p>
-            <div className="quick-foods">
-              {quickFoodSuggestions.map((food) => (
-                <button className="quick-chip" key={food.id} onClick={() => openLogFood(food)}>
-                  <strong>{cleanFoodName(food.name)}</strong>
-                  <span>{Math.round(scaleNutrition(food.per100, food.servingGrams).calories)} kcal</span>
+            </div>}
+            {addSubMode === "search" && <>
+              <div className="search-line">
+                <input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && !busy && searchOpenFoodFacts()} placeholder="banana, fried eggs, chicken..." />
+                <button className="primary" disabled={busy} onClick={searchOpenFoodFacts}>Find</button>
+              </div>
+              <div className="barcode-line">
+                <input inputMode="numeric" value={barcode} onChange={(event) => setBarcode(event.target.value)} placeholder="Enter barcode digits" />
+                <button className="secondary" disabled={busy} onClick={lookupBarcode}>Look up barcode</button>
+              </div>
+              <p className="helper">Simple foods show once. Tap Add, choose amount, done.</p>
+              <div className="quick-foods">
+                {quickFoodSuggestions.map((food) => (
+                  <button className="quick-chip" key={food.id} onClick={() => openLogFood(food)}>
+                    <strong>{cleanFoodName(food.name)}</strong>
+                    <span>{Math.round(scaleNutrition(food.per100, food.servingGrams).calories)} kcal</span>
+                  </button>
+                ))}
+              </div>
+            </>}
+
+            {addSubMode === "scan" && <>
+              <div className="section-heading">
+                <div><span className="eyebrow crimson">AI-powered</span><h2><Brain size={18} style={{verticalAlign:"middle",marginRight:6,color:"#a99cff"}} />Describe your meal</h2></div>
+              </div>
+              <p className="helper">Type what you ate in plain English — AI will estimate calories and macros.</p>
+              <div className="search-line">
+                <input
+                  value={mealDescription}
+                  onChange={(event) => setMealDescription(event.target.value)}
+                  onKeyDown={(event) => event.key === "Enter" && !busy && describeMealToAi()}
+                  placeholder="e.g. nasi lemak with egg and sambal, teh tarik"
+                />
+                <button className="primary" disabled={busy} onClick={describeMealToAi}>
+                  {busy ? <><span className="ai-spinner" aria-hidden="true" /> Thinking…</> : "Estimate"}
                 </button>
-              ))}
-            </div>
+              </div>
 
-            <hr />
-            <div className="section-heading">
-              <div><span className="eyebrow crimson">AI-powered</span><h2><Brain size={18} style={{verticalAlign:"middle",marginRight:6,color:"#a99cff"}} />Describe your meal</h2></div>
-            </div>
-            <p className="helper">Type what you ate in plain English — AI will estimate the calories and nutrition for you to review.</p>
-            <div className="search-line">
-              <input
-                value={mealDescription}
-                onChange={(event) => setMealDescription(event.target.value)}
-                onKeyDown={(event) => event.key === "Enter" && !busy && describeMealToAi()}
-                placeholder="e.g. nasi lemak with egg and sambal, teh tarik"
-              />
-              <button className="primary" disabled={busy} onClick={describeMealToAi}>Estimate</button>
-            </div>
+              <hr />
+              <div className="section-heading">
+                <div><span className="eyebrow violet">AI-powered</span><h2><Camera size={18} style={{verticalAlign:"middle",marginRight:6,color:"#4dc3ff"}} />Snap your food</h2></div>
+              </div>
+              <p className="helper">Take a photo of your meal — AI estimates calories and all macros.</p>
+              <input className="scan-hint-input" value={mealDescription} onChange={(e) => setMealDescription(e.target.value)} placeholder="Optional hint: nasi lemak, teh tarik…" />
+              <div className="scanner-actions">
+                <label className="primary file-button">📷 Camera<input type="file" accept="image/*" capture="environment" disabled={busy} onChange={(event) => analyzeFoodPhoto(event.target.files?.[0])} /></label>
+                <label className="secondary file-button">🖼 Gallery<input type="file" accept="image/*" disabled={busy} onChange={(event) => analyzeFoodPhoto(event.target.files?.[0])} /></label>
+              </div>
+              {busy && <p className="notice-inline"><span className="ai-spinner" aria-hidden="true" /> {notice}</p>}
+            </>}
 
-            <hr />
-            <div className="section-heading">
-              <div><span className="eyebrow violet">AI-powered</span><h2><Camera size={18} style={{verticalAlign:"middle",marginRight:6,color:"#4dc3ff"}} />Snap your food</h2></div>
-            </div>
-            <p className="helper">Take a photo of your meal or plate. AI will estimate the calories and nutrition — you can review and adjust before logging.</p>
-            <div className="search-line" style={{marginBottom:8}}>
-              <input
-                value={mealDescription}
-                onChange={(event) => setMealDescription(event.target.value)}
-                placeholder="Optional: describe the meal to help AI (e.g. rice and grilled chicken)"
-              />
-            </div>
-            <div className="scanner-actions">
-              <label className="primary file-button">
-                📷 Take food photo
-                <input type="file" accept="image/*" capture="environment" disabled={busy} onChange={(event) => analyzeFoodPhoto(event.target.files?.[0])} />
-              </label>
-              <label className="secondary file-button">
-                Choose from gallery
-                <input type="file" accept="image/*" disabled={busy} onChange={(event) => analyzeFoodPhoto(event.target.files?.[0])} />
-              </label>
-            </div>
+            {addSubMode === "search" && <>
+              <hr />
+              <div className="section-heading">
+                <div><span className="eyebrow violet">AI-powered</span><h2><Camera size={18} style={{verticalAlign:"middle",marginRight:6,color:"#4dc3ff"}} />Snap your food</h2></div>
+              </div>
+              <p className="helper">Take a photo of your meal or plate. AI will estimate the calories and nutrition — you can review and adjust before logging.</p>
+              <div className="scanner-actions">
+                <label className="primary file-button">
+                  📷 Take food photo
+                  <input type="file" accept="image/*" capture="environment" disabled={busy} onChange={(event) => analyzeFoodPhoto(event.target.files?.[0])} />
+                </label>
+                <label className="secondary file-button">
+                  Choose from gallery
+                  <input type="file" accept="image/*" disabled={busy} onChange={(event) => analyzeFoodPhoto(event.target.files?.[0])} />
+                </label>
+              </div>
+            </>}
             {scanPreview && (
               <div className="scan-preview-wrap">
                 <img src={scanPreview} alt="Your photo" className="scan-preview-img" />
@@ -2876,7 +2957,13 @@ function AppV2Inner() {
                   <button className="text-button danger-text" onClick={() => deleteMeasurement(item.id)}>Delete</button>
                 </article>
               ))}
-              {!sortedMeasurements.length && <p className="empty">No measurements saved yet.</p>}
+              {!sortedMeasurements.length && (
+                <div className="empty-state-card">
+                  <Scale size={32} strokeWidth={1.4} style={{color:"var(--accent-good)",marginBottom:8}} />
+                  <p className="empty">No measurements yet.</p>
+                  <p className="helper">Log your weight, waist and neck above to start tracking your body composition over time.</p>
+                </div>
+              )}
             </div>
             <div className="tool-card">
               <div className="section-heading"><div><span className="eyebrow violet">Stored locally</span><h2><Camera size={18} style={{verticalAlign:"middle",marginRight:6,color:"#a99cff"}} />Progress photos</h2></div></div>
@@ -3076,8 +3163,6 @@ function AppV2Inner() {
         {[
           ["diary", "Today", <CalendarDays size={22} strokeWidth={1.8} />],
           ["add", "Add", <Plus size={24} strokeWidth={2} />],
-          ["tools", "Scan", <ScanLine size={20} strokeWidth={1.8} />],
-          ["log", "Diary", <List size={20} strokeWidth={1.8} />],
           ["progress", "Progress", <Activity size={20} strokeWidth={1.8} />],
           ["settings", "Profile", <User size={20} strokeWidth={1.8} />],
         ].map(([key, label, icon]) => (

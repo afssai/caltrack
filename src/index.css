@@ -773,7 +773,7 @@ pre { max-height: 240px; overflow: auto; white-space: pre-wrap; color: var(--mut
   left: 50%; bottom: max(12px, env(safe-area-inset-bottom));
   transform: translateX(-50%);
   width: min(calc(100% - 16px), 680px);
-  display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px;
   border: 1px solid rgba(255,255,255,.07); border-radius: 22px;
   background: rgba(3,4,10,.94); padding: 5px;
   box-shadow:
@@ -897,7 +897,7 @@ pre { max-height: 240px; overflow: auto; white-space: pre-wrap; color: var(--mut
   .app-shell { padding: 10px 10px 115px; }
   .calorie-copy > strong { font-size: 44px; letter-spacing: -2.5px; }
   .ring { width: 76px; height: 76px; flex-basis: 76px; }
-  .bottom-nav { grid-template-columns: repeat(3,1fr); }
+  .bottom-nav { grid-template-columns: repeat(4,1fr); }
 }
 
 /* ==========================================================================
@@ -1445,7 +1445,7 @@ input:focus, select:focus, textarea:focus {
     gap: 10px;
   }
   .bottom-nav {
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 2px;
     padding: 4px;
   }
@@ -1465,7 +1465,7 @@ input:focus, select:focus, textarea:focus {
 
 @media (max-width: 375px) {
   .bottom-nav {
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
   .nav-label {
     display: none;
@@ -1618,19 +1618,8 @@ input:focus, select:focus, textarea:focus {
 }
 
 /* Add is for simple food. Scan owns barcode/OCR/AI/package tools. */
-.add-panel .barcode-line,
-.add-panel .section-heading:has(.eyebrow.crimson),
-.add-panel .section-heading:has(.eyebrow.violet),
-.add-panel .section-heading:has(.eyebrow.crimson) + p,
-.add-panel .section-heading:has(.eyebrow.violet) + p,
-.add-panel .section-heading:has(.eyebrow.crimson) + p + .search-line,
-.add-panel .scanner-actions,
-.add-panel .ai-result {
-  display: none;
-}
-.add-panel > hr {
-  display: none;
-}
+/* Scan & AI sections are now conditionally rendered by React — no CSS hide needed */
+.add-panel .result-card .ingredients { display: none; }
 .add-panel .result-card .ingredients,
 .add-panel .result-card .confidence {
   display: none;
@@ -1903,7 +1892,7 @@ input:focus, select:focus, textarea:focus {
   margin-bottom: 0;
 }
 .bottom-nav {
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(4, 1fr);
 }
 
 @media (max-width: 560px) {
@@ -1918,7 +1907,7 @@ input:focus, select:focus, textarea:focus {
     align-items: flex-start;
   }
   .bottom-nav {
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
   .bottom-nav .nav-label {
     display: none;
@@ -1934,7 +1923,7 @@ input:focus, select:focus, textarea:focus {
 
 @media (max-width: 375px) {
   .bottom-nav {
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 
@@ -2575,3 +2564,58 @@ input:focus, select:focus, textarea:focus {
 }
 .prompt-actions .primary { flex: 2; }
 .prompt-actions .secondary { flex: 1; }
+
+/* ── Add tab sub-mode toggle ── */
+.add-mode-bar {
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  background: rgba(255,255,255,.04);
+  border-radius: 14px;
+  margin-bottom: 4px;
+}
+.add-mode-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(255,255,255,.45);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .18s;
+}
+.add-mode-btn.active {
+  background: rgba(255,77,0,.15);
+  border-color: rgba(255,77,0,.35);
+  color: #fff;
+}
+
+/* ── AI review spinner ── */
+.ai-spinner {
+  display: inline-block;
+  width: 14px; height: 14px;
+  border: 2px solid rgba(169,156,255,.3);
+  border-top-color: #a99cff;
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
+/* ── Progress empty state ── */
+.empty-state-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 28px 16px;
+  border-radius: 14px;
+  border: 1px dashed rgba(255,255,255,.1);
+  text-align: center;
+}
