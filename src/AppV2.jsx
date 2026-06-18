@@ -615,9 +615,9 @@ function LockScreen({ mode, onUnlock, onSetup, owner }) {
             🔒 {owner}
           </p>
         )}
-        <p>{mode === "setup" ? "Set your email and a PIN so only you can open this app — even if someone finds the link." : "Enter your PIN to unlock your personal health log."}</p>
+        <p>{mode === "setup" ? "Create a PIN to protect your data. Adding your email lets you restore data from another device." : "Enter your PIN to unlock your personal health log."}</p>
         {mode === "setup" && (
-          <Field label="Your email (shown on lock screen)" type="email" inputMode="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Field label="Your email (optional — for cloud restore)" type="email" inputMode="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         )}
         <Field label="PIN (4-8 digits)" type="password" inputMode="numeric" autoComplete="off" maxLength="8" value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ""))} disabled={isHashing} />
         {mode === "setup" && <Field label="Confirm PIN" type="password" inputMode="numeric" autoComplete="off" maxLength="8" value={confirm} onChange={(event) => setConfirm(event.target.value.replace(/\D/g, ""))} disabled={isHashing} />}
@@ -1287,6 +1287,16 @@ function AppV2Inner() {
     localStorage.setItem(SECURITY_KEY, JSON.stringify(record));
     setSecurity(record);
     setLocked(false);
+    // If an email was provided and Supabase is configured, auto-send a magic link
+    // so the user can restore their cloud data by clicking the email link.
+    if (supabaseConfig.configured && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(owner)) {
+      try {
+        await sendMagicLink(owner);
+        flash("📧 Check your email — click the link to restore your data from another device.");
+      } catch {
+        // Non-fatal: PIN setup succeeded, cloud link is optional
+      }
+    }
     return true;
   }
 
