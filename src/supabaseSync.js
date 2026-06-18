@@ -117,6 +117,38 @@ export async function sendMagicLink(email) {
   }
 }
 
+// Derive a stable Supabase password from email + PIN.
+// Same email + PIN on any device → same credentials → same account.
+function deriveCloudPassword(email, pin) {
+  const e = email.toLowerCase().trim().split("").reverse().join("");
+  return `pulse_${e}_${pin}_v1`;
+}
+
+export async function signInWithPin(email, pin) {
+  assertConfigured();
+  const password = deriveCloudPassword(email, pin);
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({ email: email.toLowerCase().trim(), password });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, session: data.session };
+  } catch (error) {
+    return { ok: false, error: String(error?.message || error) };
+  }
+}
+
+export async function createAccountWithPin(email, pin) {
+  assertConfigured();
+  const password = deriveCloudPassword(email, pin);
+  try {
+    const { data, error } = await supabase.auth.signUp({ email: email.toLowerCase().trim(), password });
+    if (error) return { ok: false, error: error.message };
+    // If email confirmation is required, session will be null
+    return { ok: true, session: data.session, needsConfirmation: !data.session };
+  } catch (error) {
+    return { ok: false, error: String(error?.message || error) };
+  }
+}
+
 export async function signOut() {
   if (!supabase) return;
   const { error } = await supabase.auth.signOut();

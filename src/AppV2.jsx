@@ -7,6 +7,7 @@ import { preprocessLabel } from "./ocrPreprocess.js";
 import {
   cacheFoodResult,
   checkSupabaseConnection,
+  createAccountWithPin,
   enableCloudSync,
   getCurrentSession,
   optimizeImage,
@@ -14,6 +15,7 @@ import {
   readSyncStatus,
   searchFoodCache,
   sendMagicLink,
+  signInWithPin,
   signOut,
   subscribeToAuthChanges,
   supabaseConfig,
@@ -594,43 +596,74 @@ function LockScreen({ mode, onUnlock, onSetup, owner }) {
   const [confirm, setConfirm] = useState("");
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
+  const [status, setStatus] = useState(""); // loading message
   const [isHashing, setIsHashing] = useState(false);
+
   const submit = async (event) => {
     event.preventDefault();
+    if (mode === "unlock") {
+      if (!/^\d{4,8}$/.test(pin)) return setError("Use a 4-8 digit PIN.");
+      setIsHashing(true);
+      setError("");
+      const ok = await onUnlock(pin);
+      setIsHashing(false);
+      if (!ok) setError("Incorrect PIN. Try again.");
+      return;
+    }
+    // setup mode
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setError("Enter a valid email address.");
     if (!/^\d{4,8}$/.test(pin)) return setError("Use a 4-8 digit PIN.");
-    if (mode === "setup" && pin !== confirm) return setError("PIN confirmation does not match.");
+    if (pin !== confirm) return setError("PINs don't match.");
     setIsHashing(true);
     setError("");
-    const ok = mode === "setup" ? await onSetup(pin, email.trim()) : await onUnlock(pin);
+    setStatus("Connecting to your account…");
+    const ok = await onSetup(pin, email.trim(), (msg) => setStatus(msg));
     setIsHashing(false);
-    if (!ok) setError("Incorrect PIN.");
+    setStatus("");
+    if (!ok) setError("Could not sign in. Check your email and PIN and try again.");
   };
+
   return (
     <div className="lock-shell">
       <form className="lock-card" onSubmit={submit}>
         <img src={logo1Src} alt="PULSE" className="brand-logo lock-logo" />
-        <h1>{mode === "setup" ? "Create your PIN" : "Welcome back"}</h1>
+        <h1>{mode === "setup" ? "Sign in to PULSE" : "Welcome back"}</h1>
         {mode === "unlock" && owner && (
-          <p style={{ color: "var(--blue2)", fontWeight: 600, fontSize: "12px", margin: "-4px 0 0" }}>
-            🔒 {owner}
-          </p>
+          <p className="lock-owner">🔒 {owner}</p>
         )}
-        <p>{mode === "setup" ? "Create a PIN to protect your data. Adding your email lets you restore data from another device." : "Enter your PIN to unlock your personal health log."}</p>
+        <p className="lock-subtext">
+          {mode === "setup"
+            ? "Enter your email and a PIN. Same email + PIN on any device opens your data."
+            : "Enter your PIN to unlock."}
+        </p>
+
         {mode === "setup" && (
-          <Field label="Your email (optional — for cloud restore)" type="email" inputMode="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Field label="Your email" type="email" inputMode="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={isHashing} />
         )}
-        <Field label="PIN (4-8 digits)" type="password" inputMode="numeric" autoComplete="off" maxLength="8" value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ""))} disabled={isHashing} />
-        {mode === "setup" && <Field label="Confirm PIN" type="password" inputMode="numeric" autoComplete="off" maxLength="8" value={confirm} onChange={(event) => setConfirm(event.target.value.replace(/\D/g, ""))} disabled={isHashing} />}
-        {error && <div className="form-error">{error}</div>}
+        <Field label="PIN (4–8 digits)" type="password" inputMode="numeric" autoComplete="current-password" maxLength="8" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} disabled={isHashing} />
+        {mode === "setup" && (
+          <Field label="Confirm PIN" type="password" inputMode="numeric" autoComplete="new-password" maxLength="8" value={confirm} onChange={(e) => setConfirm(e.target.value.replace(/\D/g, ""))} disabled={isHashing} />
+        )}
+
+        {error && <div className="form-error" role="alert">{error}</div>}
         {isHashing && (
           <div className="pin-hashing-status" role="status" aria-live="polite">
             <span className="pin-spinner" aria-hidden="true" />
-            <span>{mode === "setup" ? "Securing your PIN…" : "Verifying…"}</span>
+            <span>{status || (mode === "setup" ? "Setting up…" : "Verifying…")}</span>
           </div>
         )}
+
         <button className="primary" type="submit" disabled={isHashing}>
-          {isHashing ? (mode === "setup" ? "Setting up…" : "Unlocking…") : (mode === "setup" ? "Lock app with my PIN" : "Unlock")}
+          {isHashing
+            ? (status || "Please wait…")
+            : (mode === "setup" ? "Open my PULSE" : "Unlock")}
         </button>
+
+        {mode === "unlock" && (
+          <p className="lock-switch-hint">
+            New device? <a href="#" onClick={(e) => { e.preventDefault(); window.location.reload(); }}>Use a different account</a>
+          </p>
+        )}
       </form>
     </div>
   );
@@ -1284,22 +1317,51 @@ function AppV2Inner() {
     setOnboardingDismissed(true);
   }
 
-  async function setupPin(pin, owner = "") {
+  async function setupPin(pin, email = "", onStatus = () => {}) {
+    // 1. Try to sign in with existing account (same email+PIN = same account on any device)
+    if (supabaseConfig.configured && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      onStatus("Signing in to your account…");
+      let session = null;
+      const signInResult = await signInWithPin(email, pin);
+      if (signInResult.ok) {
+        session = signInResult.session;
+      } else {
+        // Account doesn't exist yet — create it
+        onStatus("Creating your account…");
+        const signUpResult = await createAccountWithPin(email, pin);
+        if (signUpResult.ok && !signUpResult.needsConfirmation) {
+          session = signUpResult.session;
+        } else if (signUpResult.needsConfirmation) {
+          // Email confirmation required — fall through to local-only setup
+          // and send a magic link as fallback
+          try { await sendMagicLink(email); } catch { /* non-fatal */ }
+        }
+      }
+
+      if (session) {
+        // Pull remote data and merge with any local data
+        onStatus("Loading your data…");
+        try {
+          setCloudSession(session);
+          cloudLoadedUser.current = session.user.id;
+          enableCloudSync();
+          const remoteData = await pullRemoteData(loadData());
+          if (remoteData) {
+            setData((current) => mergeAccountData(current, remoteData));
+          }
+        } catch {
+          // Non-fatal — use whatever local data exists
+        }
+      }
+    }
+
+    // 2. Store PIN hash locally (always)
+    onStatus("Securing your PIN…");
     const next = await hashPin(pin);
-    const record = { ...next, owner: owner || data.profile.name || "" };
+    const record = { ...next, owner: email || data.profile.name || "" };
     localStorage.setItem(SECURITY_KEY, JSON.stringify(record));
     setSecurity(record);
     setLocked(false);
-    // If an email was provided and Supabase is configured, auto-send a magic link
-    // so the user can restore their cloud data by clicking the email link.
-    if (supabaseConfig.configured && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(owner)) {
-      try {
-        await sendMagicLink(owner);
-        flash("📧 Check your email — click the link to restore your data from another device.");
-      } catch {
-        // Non-fatal: PIN setup succeeded, cloud link is optional
-      }
-    }
     return true;
   }
 
