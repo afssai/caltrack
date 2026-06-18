@@ -14,7 +14,6 @@ import {
   pullRemoteData,
   readSyncStatus,
   searchFoodCache,
-  sendMagicLink,
   setPasswordForPin,
   signInWithPin,
   signOut,
@@ -1333,9 +1332,7 @@ function AppV2Inner() {
         if (signUpResult.ok && !signUpResult.needsConfirmation) {
           session = signUpResult.session;
         } else if (signUpResult.needsConfirmation) {
-          // Email confirmation required — fall through to local-only setup
-          // and send a magic link as fallback
-          try { await sendMagicLink(email); } catch { /* non-fatal */ }
+          // Email confirmation is still on in Supabase — instruct user to turn it off
         }
       }
 
@@ -3194,13 +3191,7 @@ function AppV2Inner() {
                   <p className="helper">Backup uploads current local diary, goals, pantry, recipes, measurements, and optimized progress photos. Local data stays in this browser as fallback.</p>
                 </>
               ) : supabaseConfig.configured ? (
-                <>
-                  <div className="form-grid">
-                    <Field label="Email for magic link" type="email" value={authEmail} onChange={(event) => setAuthEmail(event.target.value)} />
-                  </div>
-                  <button className="primary" disabled={syncing || !supabaseConfig.configured} onClick={sendCloudLink}>Send sign-in link</button>
-                  <p className="helper">After opening the email link, return here and use Back up now. Your PIN remains local and separate from cloud backup.</p>
-                </>
+                <p className="helper">Set up your PIN lock below to enable cloud backup. Use the same email and PIN on any device to access your data.</p>
               ) : null}
             </div>
             <div className="tool-card">
