@@ -56,7 +56,32 @@ module.exports = async function handler(req, res) {
     "ingredients": `Estimate nutrition for these ingredients: ${input.text}. Give per-ingredient and total (calories, protein, carbs, fat, fiber).`,
     "restaurant": `Estimate nutrition for this restaurant meal: ${input.text}. Give total calories, protein, carbs, fat, fiber. Note hidden oils/sauces. Start with "Estimate only —".`,
     "recipe": `Suggest a recipe using these pantry items: ${JSON.stringify(input.pantry || []).slice(0, 3000)}. Give ingredients, steps, and estimated total nutrition (calories, protein, carbs, fat, fiber). State values are estimates.`,
-    "daily-review": `Review this daily food log: ${JSON.stringify(input.daily || {}).slice(0, 3000)}. Comment on balance, missing nutrients, and one actionable suggestion. Keep it under 100 words.`,
+    "daily-review": (() => {
+      const d = input.daily || {};
+      const p = d.profile || {};
+      const c = d.computed || {};
+      const t = d.targets || {};
+      return `You are a personal nutrition coach reviewing someone's full health data for ${d.date || "today"}.
+
+PERSON: ${p.name || "User"}, ${p.gender || "unknown"} sex, age ${p.age || "?"}, height ${p.height || "?"}cm, current weight ${p.weight || "?"}kg, goal weight ${p.goalWeight || "?"}kg, goal: ${p.goalMode || "lose weight"}, activity: ${p.activityLevel || "?"}.${p.medicalConditions ? ` Medical notes: ${p.medicalConditions}.` : ""}
+
+BODY COMPOSITION: ${c.bodyFatPct != null ? `Body fat ${c.bodyFatPct}% (±3–4%), lean mass ${c.leanMassKg}kg, fat mass ${c.fatMassKg}kg.` : "Not yet measured."}
+BMR: ${c.bmr || "?"}kcal · TDEE (maintenance): ${c.tdee || "?"}kcal · Daily eating target: ${c.dailyTarget || "?"}kcal${c.projectedWeeklyLoss ? ` (projected ~${c.projectedWeeklyLoss}kg/week loss)` : ""}.
+Protein floor: ${c.proteinFloorMin || t.protein || "?"}–${c.proteinFloorMax || t.protein || "?"}g/day to protect lean mass.
+
+TODAY'S LOG (${d.date}):
+Food eaten: ${JSON.stringify(d.foodItems || []).slice(0, 1500)}
+Totals so far — calories: ${d.totals?.calories || 0}kcal, protein: ${d.totals?.protein || 0}g, carbs: ${d.totals?.carbs || 0}g, fat: ${d.totals?.fat || 0}g, fiber: ${d.totals?.fiber || 0}g.
+Remaining calories today: ${d.remainingCalories ?? "?"}.
+Water: ${d.water || 0}ml (target ${t.water || 2500}ml).
+Exercise: ${d.activities?.length ? JSON.stringify(d.activities) : "None logged."}.
+How they feel: ${JSON.stringify(d.healthFlags || {})}.
+Notes: ${d.notes || "None."}.
+
+RECENT WEIGHT TREND: ${JSON.stringify(d.recentWeights || [])}.
+
+Give honest, personalised feedback in plain paragraphs (no bullet lists). Cover: (1) how today's intake compares to their target and body needs, (2) any nutrient gaps or risks, (3) specific food suggestions for the rest of the day to fix gaps. Be direct and specific. 150–250 words.`;
+    })(),
   };
   const instruction = modeInstructions[input.mode] || `Nutrition analysis mode: ${input.mode}. Context: ${String(input.text || "").slice(0, 4000)}.`;
   const parts = [{ text: instruction }];
@@ -72,7 +97,7 @@ module.exports = async function handler(req, res) {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts }], generationConfig: { temperature: 0.2, maxOutputTokens: 600 } }),
+        body: JSON.stringify({ contents: [{ parts }], generationConfig: { temperature: 0.2, maxOutputTokens: input.mode === "daily-review" ? 1200 : 700 } }),
       },
     );
     const payload = await apiResponse.json();
