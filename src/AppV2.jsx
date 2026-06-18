@@ -4,19 +4,20 @@ import logo2Src from "./assets/LOGO2.png";
 import {
   Droplets, Droplet, Plus, CalendarDays, User, Activity, Scale,
   Brain, Camera, Search, SlidersHorizontal, Stethoscope,
-  ChevronRight, Flame, Coffee, Footprints, Waves, Bike, Dumbbell,
+  ChevronRight, Flame, Footprints, Waves, Bike, Dumbbell,
   Wind, Zap, Wheat, Leaf, Beef, Timer,
 } from "lucide-react";
 import {
   cacheFoodResult,
   checkSupabaseConnection,
+  createAccountWithPassword,
   enableCloudSync,
   getCurrentSession,
   optimizeImage,
   pullRemoteData,
   readSyncStatus,
   searchFoodCache,
-  sendMagicLink,
+  signInWithPassword,
   signOut,
   subscribeToAuthChanges,
   supabaseConfig,
@@ -28,13 +29,6 @@ const STORAGE_KEY  = "caltrack.v2";
 const SECURITY_KEY = "caltrack.v2.security";
 const MEALS = ["Breakfast", "Lunch", "Dinner", "Snack"];
 const EMPTY_NUTRITION = { calories: "", protein: "", carbs: "", fat: "", fiber: "" };
-const CONFIDENCE = {
-  off:    ["Barcode + Database", "confidence-green"],
-  usda:   ["USDA",               "confidence-green"],
-  manual: ["Manual Entry",       "confidence-yellow"],
-  ocr:    ["OCR suggestion",     "confidence-orange"],
-  ai:     ["AI Estimate",        "confidence-blue"],
-};
 const MEAL_ICONS = { Breakfast: "🌅", Lunch: "☀️", Dinner: "🌙", Snack: "🍎" };
 const API = { openFoodFacts: "/api/open-food-facts", usda: "/api/usda" };
 
@@ -162,7 +156,7 @@ function WeightJourneyCard({ entries, highestWeight, currentWeight, goalWeight: 
           <button className="primary ws-save-btn" onClick={() => {
             const w = parseFloat(quickInput);
             if (!w || w < 20 || w > 300) { flash("Enter a valid weight (20–300 kg)."); return; }
-            const dateEl = document.getElementById("wj-log-date");
+            const dateEl = /** @type {HTMLInputElement | null} */ (document.getElementById("wj-log-date"));
             const logDate = (dateEl && dateEl.value) ? dateEl.value : today;
             setData((d) => ({
               ...d,
@@ -390,6 +384,7 @@ function LockScreen({ mode, onUnlock, onSetup, owner }) {
   const [status, setStatus] = useState("");
   const [busy, setBusy]     = useState(false);
   const [sent, setSent]     = useState(false);
+  const [authMode, setAuthMode] = useState("login");
 
   const submit = async (e) => {
     e.preventDefault();
@@ -402,18 +397,35 @@ function LockScreen({ mode, onUnlock, onSetup, owner }) {
       if (!ok) setError("Wrong PIN. Try again.");
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setError("Enter a valid email address.");
-    if (!/^\d{4,8}$/.test(pin)) return setError("Local PIN must be 4–8 digits.");
-    if (pin !== confirm) return setError("PINs don't match.");
+    const cleanEmail = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) return setError("Enter a valid email address.");
+    if (!/^\d{4,8}$/.test(pin)) return setError("PIN/password must be 4-8 digits.");
+    if (authMode === "signup" && pin !== confirm) return setError("PINs don't match.");
+    if (!supabaseConfig.configured) return setError("Cloud login is not available in this build. Your local data is still safe.");
+
     setBusy(true);
-    setStatus("Sending magic link…");
-    const linkResult = await sendMagicLink(email.trim());
-    if (!linkResult.ok) { setBusy(false); setStatus(""); return setError(linkResult.error || "Could not send magic link."); }
-    setSent(true);
-    const ok = await onSetup({ pin, email: email.trim(), onStatus: (msg) => setStatus(msg) });
+    setStatus(authMode === "login" ? "Signing in..." : "Creating account...");
+    const authResult = authMode === "login"
+      ? await signInWithPassword(cleanEmail, pin)
+      : await createAccountWithPassword(cleanEmail, pin);
+
+    if (!authResult.ok) {
+      setBusy(false);
+      setStatus("");
+      return setError(authResult.error || (authMode === "login" ? "Could not sign in." : "Could not create account."));
+    }
+
+    if (authMode === "signup" && authResult.needsConfirmation) {
+      setBusy(false);
+      setSent(true);
+      setStatus("");
+      return;
+    }
+
+    const ok = await onSetup({ pin, email: cleanEmail, onStatus: (msg) => setStatus(msg) });
     setBusy(false);
     setStatus("");
-    if (!ok) setError("Setup failed. Please try again.");
+    if (!ok) setError(authMode === "login" ? "Signed in, but this device setup failed. Please try again." : "Account created, but this device setup failed. Please try again.");
   };
 
   return (
@@ -434,20 +446,32 @@ function LockScreen({ mode, onUnlock, onSetup, owner }) {
         ) : sent ? (
           <>
             <h1>Check your email</h1>
-            <p className="lock-subtext">A magic link was sent to <strong>{email}</strong>. Click it to verify, then come back to this tab — you'll be signed in automatically.</p>
-            <p className="lock-subtext" style={{marginTop:8, opacity:.6}}>Your PIN is saved on this device. You only need the magic link once per new device.</p>
+            <p className="lock-subtext">A verification email was sent to <strong>{email}</strong>. Confirm it, then return here and log in with your email and PIN/password.</p>
+            <button className="primary" type="button" onClick={() => { setSent(false); setAuthMode("login"); }}>Back to log in</button>
           </>
         ) : (
           <>
             <h1>PULSE</h1>
-            <p className="lock-subtext">Enter your email and choose a PIN. We'll send a magic link to verify your email — no password needed.</p>
+            <p className="lock-subtext">
+              {authMode === "login"
+                ? "Log in with your email and PIN/password to load your PULSE account."
+                : "Create your PULSE account with an email and a 4-8 digit PIN/password."}
+            </p>
+            <div className="auth-tabs" role="tablist" aria-label="Account action">
+              <button type="button" role="tab" aria-selected={authMode === "login"} className={authMode === "login" ? "active" : ""} onClick={() => { setAuthMode("login"); setError(""); }}>
+                Log in
+              </button>
+              <button type="button" role="tab" aria-selected={authMode === "signup"} className={authMode === "signup" ? "active" : ""} onClick={() => { setAuthMode("signup"); setError(""); }}>
+                Sign up
+              </button>
+            </div>
             <Field label="Email" type="email" inputMode="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={busy} />
-            <Field label="Local unlock PIN (4–8 digits)" type="password" inputMode="numeric" autoComplete="new-password" maxLength="8" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} disabled={busy} />
-            <Field label="Confirm PIN" type="password" inputMode="numeric" autoComplete="new-password" maxLength="8" value={confirm} onChange={(e) => setConfirm(e.target.value.replace(/\D/g, ""))} disabled={busy} />
+            <Field label="PIN/password (4-8 digits)" type="password" inputMode="numeric" autoComplete={authMode === "login" ? "current-password" : "new-password"} maxLength="8" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} disabled={busy} />
+            {authMode === "signup" && <Field label="Confirm PIN/password" type="password" inputMode="numeric" autoComplete="new-password" maxLength="8" value={confirm} onChange={(e) => setConfirm(e.target.value.replace(/\D/g, ""))} disabled={busy} />}
             {error && <div className="form-error" role="alert">{error}</div>}
-            {busy && <div className="pin-hashing-status" role="status"><span className="pin-spinner" /><span>{status || "Please wait…"}</span></div>}
+            {busy && <div className="pin-hashing-status" role="status"><span className="pin-spinner" /><span>{status || "Please wait..."}</span></div>}
             <button className="primary" type="submit" disabled={busy}>
-              {busy ? (status || "Please wait…") : "Continue"}
+              {busy ? (status || "Please wait...") : (authMode === "login" ? "Log in" : "Create account")}
             </button>
           </>
         )}
@@ -457,7 +481,7 @@ function LockScreen({ mode, onUnlock, onSetup, owner }) {
 }
 
 /* ───────────────────────── Field ───────────────────────── */
-function Field({ label, suffix, ...props }) {
+function Field({ label, suffix = "", ...props }) {
   return (
     <label className="field">
       <span>{label}</span>
@@ -617,7 +641,7 @@ function openFoodFactsFood(product) {
 
 function usdaFood(food) {
   const nutrients = food.foodNutrients || [];
-  const find = ({ ids = [], names = [], unit }) => {
+  const find = ({ ids = [], names = [], unit = "" }) => {
     const n = nutrients.find((item) => {
       const nId = Number(item.nutrientId);
       const nm  = String(item.nutrientName || "").toLowerCase();
@@ -759,7 +783,7 @@ function AppV2Inner() {
   const [security,   setSecurity]   = useState(readSecurity);
   const [locked,     setLocked]     = useState(true);
   const [data,       setData]       = useState(loadData);
-  const [date,       setDate]       = useState(localDate);
+  const [date]       = useState(localDate);
   const [tab,        setTab]        = useState("diary");
 
   // food-related state
@@ -775,7 +799,6 @@ function AppV2Inner() {
   const [describeOpen,    setDescribeOpen]    = useState(false);
   const [pendingLogFood,  setPendingLogFood]  = useState(null);
   const [scanPreview,     setScanPreview]     = useState("");
-  const [aiPhotoResult,   setAiPhotoResult]   = useState("");
 
   // progress / measurements
   const [measurement,     setMeasurement]     = useState({ weight: "", waist: "", neck: "", hip: "" });
@@ -820,7 +843,6 @@ function AppV2Inner() {
   const totals      = useMemo(() => totalsFor(items), [items]);
   const dailyLog    = { water: 0, notes: "", activities: [], medsTaken: [], healthFlags: {}, ...(data.dailyLogs[date] || {}) };
   const dailyTarget = calcDailyTarget(data.profile);
-  const remaining   = dailyTarget - totals.calories;
   const caloriePercent = dailyTarget ? Math.min(100, (totals.calories / dailyTarget) * 100) : 0;
 
   const weightEntries = useMemo(
@@ -873,7 +895,6 @@ function AppV2Inner() {
     };
     calAnimRef.current = requestAnimationFrame(step);
     return () => { if (calAnimRef.current) cancelAnimationFrame(calAnimRef.current); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totals.calories, dailyTarget]);
 
   /* ─── Persist to localStorage ─── */
@@ -1044,13 +1065,13 @@ function AppV2Inner() {
 
   function dismissOnboarding() { localStorage.setItem("caltrack.v2.onboarding", "dismissed"); setOnboardingDismissed(true); }
 
-  async function setupPin({ pin, email = "", onStatus = () => {} }) {
+  async function setupPin({ pin, email = "", onStatus = (_message) => {} }) {
     onStatus("Saving PIN…");
     const next = await hashPin(pin);
     const record = { ...next, owner: email };
     localStorage.setItem(SECURITY_KEY, JSON.stringify(record));
     setSecurity(record);
-    // Cloud session may arrive later via magic link click — handled by subscribeToAuthChanges
+    // Cloud session is created by the account login/signup step before local PIN setup.
     const existingSession = await getCurrentSession().catch(() => null);
     if (existingSession) {
       onStatus("Syncing your data…");
@@ -1220,7 +1241,7 @@ function AppV2Inner() {
     if (!file.type.startsWith("image/")) return flash("Choose an image file.");
     setScanPreview(URL.createObjectURL(file));
     setBusy(true); setNotice("Analysing photo with AI…");
-    setPendingLogFood(null); setAiPhotoResult("");
+    setPendingLogFood(null);
     try {
       const optimized = await optimizeImage(file);
       let imageData = optimized.dataUrl;
@@ -1241,7 +1262,6 @@ function AppV2Inner() {
       if (!response.ok) { const p = await response.json().catch(() => ({})); throw new Error(p.error || "AI analysis failed."); }
       const { analysis } = await response.json();
       const parsed = parseAiNutrition(analysis);
-      setAiPhotoResult(analysis);
       setPendingLogFood({ name: parsed.name || mealDescription.trim() || "AI meal estimate", servingGrams: 100, calories: parsed.calories || "", protein: parsed.protein || "", carbs: parsed.carbs || "", fat: parsed.fat || "", fiber: parsed.fiber || "", confidence: "ai" });
       setNotice("");
     } catch (err) { flash(friendlyError(err, "Photo analysis failed. Try manual entry.")); }
@@ -1381,10 +1401,6 @@ function AppV2Inner() {
           const burnedToday   = (dailyLog.activities || []).reduce((s, a) => s + number(a.kcal), 0);
           const netConsumed   = Math.max(0, totals.calories - burnedToday);
           const netRemaining  = dailyTarget - netConsumed;
-          const bmr           = calcBMRMifflin(data.profile) || 0;
-          const tdee          = calcTDEE(data.profile) || 0;
-          const deficitKcal   = bmr > 0 ? bmr - dailyTarget : 0;
-          const deficitPct    = bmr > 0 ? Math.round((deficitKcal / bmr) * 100) : 0;
           const weightEntries2= [...data.measurements].filter((m) => number(m.weight) > 0).sort((a,b) => a.date.localeCompare(b.date));
           const startW        = number(data.profile.highestWeight) || (weightEntries2[0] ? number(weightEntries2[0].weight) : 0);
           const curW          = weightEntries2.length ? number(weightEntries2[weightEntries2.length-1].weight) : number(data.profile.weight);
@@ -1621,9 +1637,9 @@ function AppV2Inner() {
                       name: pendingLogFood.name, confidence: "ai",
                       per100: { calories: number(pendingLogFood.calories), protein: number(pendingLogFood.protein), carbs: number(pendingLogFood.carbs), fat: number(pendingLogFood.fat), fiber: number(pendingLogFood.fiber) },
                     }, 100, logForm.meal);
-                    setPendingLogFood(null); setScanPreview(""); setAiPhotoResult("");
+                    setPendingLogFood(null); setScanPreview("");
                   }}>Add to {logForm.meal}</button>
-                  <button className="secondary" onClick={() => { setPendingLogFood(null); setScanPreview(""); setAiPhotoResult(""); }}>Discard</button>
+                  <button className="secondary" onClick={() => { setPendingLogFood(null); setScanPreview(""); }}>Discard</button>
                 </div>
               </div>
             )}
@@ -1926,12 +1942,12 @@ function AppV2Inner() {
 
       {/* ─── Bottom nav ─── */}
       <nav className="bottom-nav" role="tablist" aria-label="Primary navigation">
-        {[
+        {/** @type {Array<[string, string, React.ReactNode]>} */ ([
           ["diary",    "Today",    <CalendarDays size={22} strokeWidth={1.8} aria-hidden="true" />],
           ["add",      "Log",      <Plus         size={24} strokeWidth={2}   aria-hidden="true" />],
           ["progress", "Progress", <Activity     size={20} strokeWidth={1.8} aria-hidden="true" />],
           ["settings", "Me",       <User         size={20} strokeWidth={1.8} aria-hidden="true" />],
-        ].map(([key, label, icon]) => (
+        ]).map(([key, label, icon]) => (
           <button key={key} role="tab" aria-selected={tab === key} className={tab === key ? "active" : ""} onClick={() => setTab(key)}>
             <span className="nav-icon">{icon}</span>
             <span className="nav-label">{label}</span>

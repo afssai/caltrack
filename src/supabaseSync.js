@@ -103,22 +103,35 @@ export async function getCurrentSession() {
 export async function signInWithPassword(email, password) {
   assertConfigured();
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({ email: email.toLowerCase().trim(), password });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.toLowerCase().trim(),
+      password,
+    });
     if (error) return { ok: false, error: error.message };
-    return { ok: true, session: data.session };
+    return { ok: true, session: data.session, user: data.user };
   } catch (error) {
-    return { ok: false, error: String(error?.message || error) };
+    const friendly = friendlySupabaseError(error);
+    return { ok: false, error: friendly.message || "Could not sign in." };
   }
 }
 
 export async function createAccountWithPassword(email, password) {
   assertConfigured();
   try {
-    const { data, error } = await supabase.auth.signUp({ email: email.toLowerCase().trim(), password });
+    const { data, error } = await supabase.auth.signUp({
+      email: email.toLowerCase().trim(),
+      password,
+    });
     if (error) return { ok: false, error: error.message };
-    return { ok: true, session: data.session, needsConfirmation: !data.session };
+    return {
+      ok: true,
+      session: data.session,
+      user: data.user,
+      needsConfirmation: Boolean(data.user && !data.session),
+    };
   } catch (error) {
-    return { ok: false, error: String(error?.message || error) };
+    const friendly = friendlySupabaseError(error);
+    return { ok: false, error: friendly.message || "Could not create account." };
   }
 }
 
@@ -126,20 +139,6 @@ export async function signOut() {
   if (!supabase) return;
   const { error } = await supabase.auth.signOut();
   throwIfError(error, "Could not sign out.");
-}
-
-export async function sendMagicLink(email) {
-  assertConfigured();
-  try {
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.toLowerCase().trim(),
-      options: { shouldCreateUser: true },
-    });
-    if (error) return { ok: false, error: error.message };
-    return { ok: true };
-  } catch (error) {
-    return { ok: false, error: String(error?.message || error) };
-  }
 }
 
 function idsFor(data) {
@@ -492,14 +491,22 @@ export async function pushLocalData(data, session) {
   try {
     await upsert("profiles", [rows.profile], { onConflict: "id" });
   } catch {
-    const { name, gender, age, height, weight, activity_level, highest_weight, medical_conditions, medications, ...coreProfile } = rows.profile;
+    const coreProfile = { ...rows.profile };
+    for (const key of ["name", "gender", "age", "height", "weight", "activity_level", "highest_weight", "medical_conditions", "medications"]) {
+      delete coreProfile[key];
+    }
     await upsert("profiles", [coreProfile], { onConflict: "id" });
   }
   await upsert("diary_entries", rows.diaryEntries);
   try {
     await upsert("daily_logs", rows.dailyLogs);
   } catch {
-    const coreLogs = rows.dailyLogs.map(({ health_flags, meds_taken, ...rest }) => rest);
+    const coreLogs = rows.dailyLogs.map((row) => {
+      const rest = { ...row };
+      delete rest.health_flags;
+      delete rest.meds_taken;
+      return rest;
+    });
     await upsert("daily_logs", coreLogs);
   }
   await upsert("measurements", rows.measurements);
