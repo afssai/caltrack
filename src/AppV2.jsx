@@ -643,7 +643,7 @@ function LockScreen({ mode, onUnlock, onSetup, owner }) {
             {error && <div className="form-error" role="alert">{error}</div>}
             {busy && <div className="pin-hashing-status" role="status"><span className="pin-spinner" /><span>Verifying…</span></div>}
             <button className="primary" type="submit" disabled={busy}>Unlock</button>
-            <p className="lock-switch-hint">Different account? <a href="#" onClick={(e) => { e.preventDefault(); localStorage.removeItem("caltrack.v2.security"); window.location.reload(); }}>Sign in with another email</a></p>
+            <p className="lock-switch-hint">On a new device? <a href="#" onClick={(e) => { e.preventDefault(); localStorage.removeItem("caltrack.v2.security"); window.location.reload(); }}>Sign in with email + PIN</a></p>
           </>
         ) : (
           <>
