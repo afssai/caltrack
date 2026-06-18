@@ -56,31 +56,21 @@ class ErrorBoundary extends React.Component {
 }
 
 /* ───────────────────────── CalorieRing ───────────────────────── */
-function CalorieRing({ consumed, burned = 0, target, percent, size = 100 }) {
-  const outerR = 40, innerR = 29, cx = 50, cy = 50;
-  const outerC = 2 * Math.PI * outerR;
-  const innerC = 2 * Math.PI * innerR;
-  const cFrac  = Math.min(1, consumed / Math.max(1, target));
-  const bFrac  = Math.min(1, burned  / Math.max(1, target));
-  const isOver = cFrac >= 1;
+function CalorieRing({ consumed, target, percent, size = 100 }) {
+  const r = 40, cx = 50, cy = 50;
+  const circ = 2 * Math.PI * r;
+  const frac = Math.min(1, consumed / Math.max(1, target));
+  const isOver = frac >= 1;
   return (
     <svg width={size} height={size} viewBox="0 0 100 100" className="calorie-ring-svg" aria-hidden="true">
-      <circle cx={cx} cy={cy} r={outerR} fill="none" stroke="rgba(255,255,255,.07)" strokeWidth="8" />
-      <circle cx={cx} cy={cy} r={innerR} fill="none" stroke="rgba(255,255,255,.07)" strokeWidth="7" />
-      <circle cx={cx} cy={cy} r={outerR} fill="none"
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,.07)" strokeWidth="9" />
+      <circle cx={cx} cy={cy} r={r} fill="none"
         stroke={isOver ? "#ff5050" : "#ff4500"}
-        strokeWidth="8" strokeLinecap="round"
-        strokeDasharray={`${cFrac * outerC} ${outerC}`}
+        strokeWidth="9" strokeLinecap="round"
+        strokeDasharray={`${frac * circ} ${circ}`}
         transform="rotate(-90 50 50)" />
-      {burned > 0 && (
-        <circle cx={cx} cy={cy} r={innerR} fill="none"
-          stroke="#ff8c00"
-          strokeWidth="7" strokeLinecap="round"
-          strokeDasharray={`${bFrac * innerC} ${innerC}`}
-          transform="rotate(-90 50 50)" />
-      )}
-      <text x="50" y="46" textAnchor="middle" fill="white" fontSize="14" fontWeight="800" fontFamily="'Inter',sans-serif">{Math.round(percent)}%</text>
-      <text x="50" y="56" textAnchor="middle" fill="rgba(255,255,255,.45)" fontSize="7" letterSpacing="1" fontFamily="'Inter',sans-serif">USED</text>
+      <text x="50" y="46" textAnchor="middle" fill="white" fontSize="15" fontWeight="800" fontFamily="'Inter',sans-serif">{Math.round(percent)}%</text>
+      <text x="50" y="57" textAnchor="middle" fill="rgba(255,255,255,.45)" fontSize="7" letterSpacing="1" fontFamily="'Inter',sans-serif">USED</text>
     </svg>
   );
 }
@@ -280,6 +270,57 @@ function WeightJourneyCard({ entries, highestWeight, currentWeight, goalWeight: 
   );
 }
 
+/* ───────────────────────── ActivityCard ───────────────────────── */
+function ActivityCard({ dailyLog, patchDailyLog }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [kcal, setKcal] = useState("");
+  const activities = dailyLog.activities || [];
+  const totalBurned = activities.reduce((s, a) => s + number(a.kcal), 0);
+
+  function addActivity() {
+    if (!name.trim() || !number(kcal)) return;
+    patchDailyLog({ activities: [...activities, { id: makeId(), name: name.trim(), kcal: number(kcal) }] });
+    setName(""); setKcal(""); setOpen(false);
+  }
+
+  function removeActivity(id) {
+    patchDailyLog({ activities: activities.filter((a) => a.id !== id) });
+  }
+
+  return (
+    <div className="activity-card">
+      <div className="activity-card-top">
+        <div className="activity-card-left">
+          <Activity size={18} color="#ff8c00" />
+          <span className="activity-card-title">Activity</span>
+        </div>
+        {totalBurned > 0 && <span className="activity-card-burned">−{Math.round(totalBurned)} kcal burned</span>}
+      </div>
+      {activities.length > 0 && (
+        <div className="activity-list">
+          {activities.map((a) => (
+            <div key={a.id} className="activity-row">
+              <span className="activity-row-name">{a.name}</span>
+              <span className="activity-row-cal">−{Math.round(a.kcal)} kcal</span>
+              <button className="activity-row-del" onClick={() => removeActivity(a.id)}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {open ? (
+        <div className="activity-add-form">
+          <input placeholder="e.g. Running 30 min" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && kcal && addActivity()} autoFocus />
+          <input type="number" placeholder="kcal" min="0" max="3000" value={kcal} onChange={(e) => setKcal(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addActivity()} style={{ width: 72 }} />
+          <button className="activity-add-btn" onClick={addActivity}>Add</button>
+        </div>
+      ) : (
+        <button className="activity-add-open" onClick={() => setOpen(true)}>+ Log activity</button>
+      )}
+    </div>
+  );
+}
+
 /* ───────────────────────── LockScreen ───────────────────────── */
 function LockScreen({ mode, onUnlock, onSetup, owner }) {
   const [email, setEmail]   = useState("");
@@ -470,6 +511,28 @@ function calcDailyTarget(p) {
   return Math.max(bmrFloor, tdee - deficit);
 }
 
+function calcNavyBodyFat(p) {
+  const h = number(p.height), w = number(p.waist), n = number(p.neck), hip = number(p.hip);
+  if (!h || !w || !n || w <= n) return null;
+  if (p.gender === "male") {
+    return Math.max(0, 86.010 * Math.log10(w - n) - 70.041 * Math.log10(h) + 36.76);
+  }
+  if (p.gender === "female") {
+    if (!hip || w + hip <= n) return null;
+    return Math.max(0, 163.205 * Math.log10(w + hip - n) - 97.684 * Math.log10(h) - 78.387);
+  }
+  return null;
+}
+
+function calcBodyComposition(p) {
+  const bf = calcNavyBodyFat(p);
+  const weight = number(p.weight);
+  if (bf === null || !weight) return null;
+  const fatMass  = round(weight * bf / 100);
+  const leanMass = round(weight - fatMass);
+  return { bf: round(bf), fatMass, leanMass };
+}
+
 function openFoodFactsFood(product) {
   const nutrients = product.nutriments || {};
   return {
@@ -652,7 +715,7 @@ function AppV2Inner() {
   const [aiPhotoResult,   setAiPhotoResult]   = useState("");
 
   // progress / measurements
-  const [measurement,     setMeasurement]     = useState({ weight: "", waist: "", neck: "" });
+  const [measurement,     setMeasurement]     = useState({ weight: "", waist: "", neck: "", hip: "" });
 
   // settings / PIN
   const [pinChange,       setPinChange]       = useState({ current: "", next: "", confirm: "" });
@@ -968,6 +1031,7 @@ function AppV2Inner() {
   }
 
   function addWater(ml) { updateDailyLog({ water: Math.max(0, number(dailyLog.water) + ml) }); flash(`+${Math.round(ml)} ml water.`); }
+  function patchDailyLog(patch) { updateDailyLog(patch); }
 
   function openLogFood(food) {
     setSelectedFood(food);
@@ -1157,15 +1221,24 @@ function AppV2Inner() {
   }
 
   function saveMeasurement() {
-    if (number(measurement.weight) <= 0 && number(measurement.waist) <= 0) return flash("Enter at least one measurement.");
-    const entry = { id: makeId(), date, weight: number(measurement.weight) > 0 ? round(measurement.weight) : "", waist: number(measurement.waist) > 0 ? round(measurement.waist) : "", neck: "" };
+    const hasData = ["weight","waist","neck","hip"].some((k) => number(measurement[k]) > 0);
+    if (!hasData) return flash("Enter at least one measurement.");
+    const entry = {
+      id: makeId(), date,
+      weight: number(measurement.weight) > 0 ? round(measurement.weight) : "",
+      waist:  number(measurement.waist)  > 0 ? round(measurement.waist)  : "",
+      neck:   number(measurement.neck)   > 0 ? round(measurement.neck)   : "",
+      hip:    number(measurement.hip)    > 0 ? round(measurement.hip)    : "",
+    };
     setData((d) => {
-      const profilePatch = {};
-      if (number(measurement.waist)  > 0) profilePatch.waist  = entry.waist;
-      if (number(measurement.weight) > 0) profilePatch.weight = entry.weight;
-      return { ...d, measurements: [...d.measurements.filter((m) => m.date !== date), entry], profile: Object.keys(profilePatch).length ? { ...d.profile, ...profilePatch } : d.profile };
+      const p = {};
+      if (number(measurement.weight) > 0) p.weight = entry.weight;
+      if (number(measurement.waist)  > 0) p.waist  = entry.waist;
+      if (number(measurement.neck)   > 0) p.neck   = entry.neck;
+      if (number(measurement.hip)    > 0) p.hip    = entry.hip;
+      return { ...d, measurements: [...d.measurements.filter((m) => m.date !== date), entry], profile: Object.keys(p).length ? { ...d.profile, ...p } : d.profile };
     });
-    setMeasurement({ weight: "", waist: "", neck: "" });
+    setMeasurement({ weight: "", waist: "", neck: "", hip: "" });
     flash(`Measurement saved for ${date}.`);
   }
 
@@ -1215,9 +1288,7 @@ function AppV2Inner() {
       {/* Topbar */}
       <header className="topbar">
         <img src={logo2Src} alt="PULSE" className="brand-logo app-logo" />
-        {cloudSession?.user && syncStatus.enabled && online && (
-          <span className="sync-badge"><span className="sync-dot" />{syncing ? "Syncing…" : "Synced"}</span>
-        )}
+        <span style={{ fontSize: 12, color: "var(--text3)" }}>{new Date().toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}</span>
       </header>
 
       {/* Onboarding */}
@@ -1298,10 +1369,21 @@ function AppV2Inner() {
             {/* Streak */}
             {streak > 0 && (
               <div className="streak-pill">
-                <Flame size={14} />
-                {streak}-day streak
+                <span className="streak-count">🔥{streak}</span>
+                <div className="streak-label">
+                  <strong>{streak === 1 ? "1 day streak" : `${streak}-day streak`}</strong>
+                  <span>Keep logging every day to grow it</span>
+                </div>
+                <div className="streak-dots">
+                  {Array.from({ length: Math.min(streak, 7) }).map((_, i) => (
+                    <div key={i} className={`streak-dot${i < streak ? " lit" : ""}`} />
+                  ))}
+                </div>
               </div>
             )}
+
+            {/* Activity card */}
+            <ActivityCard dailyLog={dailyLog} patchDailyLog={patchDailyLog} />
 
             {/* Meal sections */}
             {MEALS.map((meal) => {
@@ -1480,6 +1562,47 @@ function AppV2Inner() {
               flash={flash}
             />
 
+            {/* Body composition card */}
+            {(() => {
+              const bc = calcBodyComposition(data.profile);
+              if (!bc) return (
+                <div className="bodyfat-card">
+                  <h3>Body Composition</h3>
+                  <p style={{ fontSize: 12, color: "var(--text3)", lineHeight: 1.6 }}>
+                    Add your <strong style={{ color: "var(--text2)" }}>waist, neck{data.profile.gender === "female" ? ", and hip" : ""}</strong> measurements in the Me tab to unlock body fat %, lean mass, and a personalised calorie target using the US Navy formula.
+                  </p>
+                </div>
+              );
+              const tdee = calcTDEE(data.profile);
+              const target = calcDailyTarget(data.profile);
+              const deficitPct = tdee > 0 ? Math.round((1 - target / tdee) * 100) : 0;
+              const bfColor = bc.bf < 15 ? "#00d278" : bc.bf < 25 ? "#ff8c00" : "#ff5050";
+              return (
+                <div className="bodyfat-card">
+                  <h3>Body Composition (US Navy Formula)</h3>
+                  <div className="bodyfat-grid">
+                    <div className="bodyfat-stat"><strong style={{ color: bfColor }}>{bc.bf}%</strong><span>Body Fat</span></div>
+                    <div className="bodyfat-stat"><strong>{bc.leanMass} kg</strong><span>Lean Mass</span></div>
+                    <div className="bodyfat-stat"><strong>{bc.fatMass} kg</strong><span>Fat Mass</span></div>
+                  </div>
+                  <div className="bodyfat-bar-wrap">
+                    <div className="bodyfat-bar-track">
+                      <div className="bodyfat-bar-fill" style={{ width: `${Math.min(100, bc.bf * 2.5)}%` }} />
+                    </div>
+                    <div className="bodyfat-bar-labels"><span>Essential</span><span>Fit</span><span>Average</span><span>Obese</span></div>
+                  </div>
+                  {tdee > 0 && (
+                    <div className="calculation">
+                      <div><span>TDEE</span><strong>{tdee} kcal</strong></div>
+                      <div><span>Daily target</span><strong>{target} kcal</strong></div>
+                      {deficitPct > 0 && <div><span>Deficit</span><strong style={{ color: "var(--success)" }}>−{deficitPct}%</strong></div>}
+                    </div>
+                  )}
+                  <p className="bodyfat-hint">Based on height {data.profile.height} cm · waist {data.profile.waist} cm · neck {data.profile.neck} cm{data.profile.hip ? ` · hip ${data.profile.hip} cm` : ""}. Update measurements in Me tab for a fresh reading.</p>
+                </div>
+              );
+            })()}
+
             <div className="tool-card">
               <div className="section-heading">
                 <div>
@@ -1490,7 +1613,8 @@ function AppV2Inner() {
               <CalorieChart diary={data.diary} target={dailyTarget} />
               {streak > 0 && (
                 <div className="streak-pill" style={{ marginTop: 10 }}>
-                  <Flame size={14} /> {streak}-day logging streak
+                  <span className="streak-count">🔥{streak}</span>
+                  <div className="streak-label"><strong>{streak}-day logging streak</strong></div>
                 </div>
               )}
             </div>
@@ -1499,12 +1623,16 @@ function AppV2Inner() {
               <div className="section-heading">
                 <div>
                   <span className="eyebrow">Log measurement</span>
-                  <h2><Scale size={16} style={{ verticalAlign: "middle", marginRight: 5 }} />Weight &amp; Waist</h2>
+                  <h2><Scale size={16} style={{ verticalAlign: "middle", marginRight: 5 }} />Body Measurements</h2>
                 </div>
               </div>
               <div className="form-grid" style={{ marginBottom: 12 }}>
                 <Field label="Weight" suffix="kg" type="number" step="0.1" min="20" max="300" value={measurement.weight} onChange={(e) => setMeasurement((m) => ({ ...m, weight: e.target.value }))} />
                 <Field label="Waist" suffix="cm" type="number" step="0.1" min="40" max="200" value={measurement.waist} onChange={(e) => setMeasurement((m) => ({ ...m, waist: e.target.value }))} />
+                <Field label="Neck" suffix="cm" type="number" step="0.1" min="20" max="70" value={measurement.neck || ""} onChange={(e) => setMeasurement((m) => ({ ...m, neck: e.target.value }))} />
+                {data.profile.gender === "female" && (
+                  <Field label="Hip" suffix="cm" type="number" step="0.1" min="50" max="200" value={measurement.hip || ""} onChange={(e) => setMeasurement((m) => ({ ...m, hip: e.target.value }))} />
+                )}
               </div>
               <button className="primary" style={{ width: "100%", marginBottom: 14 }} onClick={saveMeasurement}>Save measurement</button>
 
@@ -1548,6 +1676,11 @@ function AppV2Inner() {
                 <Field label="Age" suffix="yrs" type="number" min="10" max="120" value={data.profile.age} onChange={(e) => setProfile({ age: e.target.value })} />
                 <Field label="Height" suffix="cm" type="number" min="100" max="250" value={data.profile.height} onChange={(e) => setProfile({ height: e.target.value })} />
                 <Field label="Current weight" suffix="kg" type="number" step="0.1" min="20" max="300" value={data.profile.weight} onChange={(e) => setProfile({ weight: e.target.value })} />
+                <Field label="Waist" suffix="cm" type="number" step="0.1" min="40" max="200" value={data.profile.waist} onChange={(e) => setProfile({ waist: e.target.value })} />
+                <Field label="Neck" suffix="cm" type="number" step="0.1" min="20" max="70" value={data.profile.neck} onChange={(e) => setProfile({ neck: e.target.value })} />
+                {data.profile.gender === "female" && (
+                  <Field label="Hip" suffix="cm" type="number" step="0.1" min="50" max="200" value={data.profile.hip} onChange={(e) => setProfile({ hip: e.target.value })} />
+                )}
                 <label className="field">
                   <span>Activity level</span>
                   <select value={data.profile.activityLevel} onChange={(e) => setProfile({ activityLevel: e.target.value })}>
@@ -1585,12 +1718,24 @@ function AppV2Inner() {
                   <h2><SlidersHorizontal size={16} style={{ verticalAlign: "middle", marginRight: 5 }} />Goals</h2>
                 </div>
               </div>
-              {calcTDEE(data.profile) > 0 && (
-                <div className="calculation" style={{ marginBottom: 14 }}>
-                  <div><span>TDEE (maintenance)</span><strong>{calcTDEE(data.profile)} kcal</strong></div>
-                  <div><span>Suggested eating target</span><strong>{calcDailyTarget(data.profile)} kcal</strong></div>
-                </div>
-              )}
+              {calcTDEE(data.profile) > 0 && (() => {
+                const tdee = calcTDEE(data.profile);
+                const target = calcDailyTarget(data.profile);
+                const deficitPct = tdee > 0 ? Math.round((1 - target / tdee) * 100) : 0;
+                const bc = calcBodyComposition(data.profile);
+                return (
+                  <div className="calculation" style={{ marginBottom: 14 }}>
+                    <div><span>TDEE (maintenance)</span><strong>{tdee} kcal</strong></div>
+                    <div><span>Eating target</span><strong>{target} kcal</strong></div>
+                    {deficitPct > 0 && <div><span>Calorie deficit</span><strong style={{ color: "var(--success)" }}>−{deficitPct}%</strong></div>}
+                    {bc && <>
+                      <div><span>Body fat %</span><strong style={{ color: "#ff8c00" }}>{bc.bf}%</strong></div>
+                      <div><span>Lean mass</span><strong>{bc.leanMass} kg</strong></div>
+                      <div><span>Fat mass</span><strong>{bc.fatMass} kg</strong></div>
+                    </>}
+                  </div>
+                );
+              })()}
               <div className="form-grid">
                 <Field label="Daily calorie goal" suffix="kcal" type="number" min="0" value={data.profile.calorieTarget} onChange={(e) => setProfile({ calorieTarget: number(e.target.value) })} />
                 <Field label="Protein goal" suffix="g" type="number" min="0" value={data.profile.proteinTarget} onChange={(e) => setProfile({ proteinTarget: number(e.target.value) })} />
