@@ -1369,8 +1369,23 @@ function AppV2Inner() {
     if (!security) return false;
     const candidate = await hashPin(pin, security.salt);
     const ok = candidate.hash === security.hash;
-    if (ok) setLocked(false);
-    return ok;
+    if (!ok) return false;
+    setLocked(false);
+    // If we have an email stored and Supabase is configured, sign in and pull data
+    const email = security.owner;
+    if (supabaseConfig.configured && email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && !cloudSession) {
+      try {
+        const result = await signInWithPin(email, pin);
+        if (result.ok && result.session) {
+          setCloudSession(result.session);
+          cloudLoadedUser.current = result.session.user.id;
+          enableCloudSync();
+          const remoteData = await pullRemoteData(loadData());
+          if (remoteData) setData((current) => mergeAccountData(current, remoteData));
+        }
+      } catch { /* non-fatal — app is already unlocked */ }
+    }
+    return true;
   }
 
   async function changePin() {
