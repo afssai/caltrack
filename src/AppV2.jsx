@@ -581,12 +581,15 @@ function calcTDEE(p) {
   return Math.round(bmr * (factors[p.activityLevel] || 1.375));
 }
 function calcDailyTarget(p) {
+  const bmr = calcBMRMifflin(p);
   const tdee = calcTDEE(p);
-  if (!tdee) return number(p.calorieTarget) || 2000;
-  if (p.goalMode === "maintain") return tdee;
+  if (!bmr) return number(p.calorieTarget) || 2000;
+  if (p.goalMode === "maintain") return tdee || bmr;
+  // Base the eat target on BMR (resting burn), not TDEE.
+  // Any exercise burned on top is extra fat loss — not counted in the target.
   const deficit = number(p.deficitRate) || 500;
-  const bmrFloor = calcBMRMifflin(p) || 1200;
-  return Math.max(bmrFloor, tdee - deficit);
+  const safeFloor = Math.max(1200, Math.round(bmr * 0.6));
+  return Math.max(safeFloor, bmr - deficit);
 }
 
 function calcNavyBodyFat(p) {
@@ -1398,7 +1401,8 @@ function AppV2Inner() {
           const netRemaining  = dailyTarget - netConsumed;
           const bmr           = calcBMRMifflin(data.profile) || 0;
           const tdee          = calcTDEE(data.profile) || 0;
-          const deficitPct    = tdee > 0 ? Math.round((1 - dailyTarget / tdee) * 100) : 0;
+          const deficitKcal   = bmr > 0 ? bmr - dailyTarget : 0;
+          const deficitPct    = bmr > 0 ? Math.round((deficitKcal / bmr) * 100) : 0;
           const weightEntries2= [...data.measurements].filter((m) => number(m.weight) > 0).sort((a,b) => a.date.localeCompare(b.date));
           const startW        = number(data.profile.highestWeight) || (weightEntries2[0] ? number(weightEntries2[0].weight) : 0);
           const curW          = weightEntries2.length ? number(weightEntries2[weightEntries2.length-1].weight) : number(data.profile.weight);
@@ -1440,10 +1444,10 @@ function AppV2Inner() {
               {/* BMR / deficit strip */}
               {bmr > 0 && (
                 <div className="bmr-strip">
-                  <div className="bmr-stat"><span>At rest (BMR)</span><strong>{bmr} kcal</strong></div>
-                  {tdee > 0 && <div className="bmr-stat"><span>With activity (TDEE)</span><strong>{tdee} kcal</strong></div>}
-                  <div className="bmr-stat"><span>Your eat target</span><strong style={{ color: "var(--accent)" }}>{dailyTarget} kcal</strong></div>
-                  {deficitPct > 0 && <div className="bmr-stat"><span>Deficit</span><strong style={{ color: "var(--success)" }}>−{deficitPct}%</strong></div>}
+                  <div className="bmr-stat"><span>Doing nothing (BMR)</span><strong>{bmr} kcal</strong></div>
+                  <div className="bmr-stat"><span>Safe eat target</span><strong style={{ color: "var(--accent)" }}>{dailyTarget} kcal</strong></div>
+                  {deficitKcal > 0 && <div className="bmr-stat"><span>Daily deficit</span><strong style={{ color: "var(--success)" }}>−{deficitKcal} kcal</strong></div>}
+                  {deficitPct > 0 && <div className="bmr-stat"><span>Fat burn rate</span><strong style={{ color: "var(--success)" }}>−{deficitPct}% of BMR</strong></div>}
                 </div>
               )}
 
