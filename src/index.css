@@ -301,7 +301,7 @@ input:focus, select:focus, textarea:focus {
 .macro:nth-child(4):hover { box-shadow: 0 6px 32px rgba(0,230,118,.1), var(--glow-green); border-color: rgba(0,230,118,.42); }
 
 .macro-top { display: flex; align-items: baseline; justify-content: space-between; gap: 4px; }
-.macro-top strong { font: 700 16px/1 "Syne"; }
+.macro-top strong { font: 700 16px/1 "Syne"; font-variant-numeric: tabular-nums slashed-zero; font-feature-settings: 'tnum' 1, 'zero' 1; }
 .macro-top span, .macro small { color: var(--muted); font-size: 9px;  text-transform: uppercase; letter-spacing: .5px; }
 .macro small { display: block; margin-top: 6px; }
 
@@ -358,26 +358,44 @@ input:focus, select:focus, textarea:focus {
 .empty   { color: var(--muted); font-size: 12px; }
 
 /* Onboarding card */
+/* Top-of-page onboarding banner (new placement — above calorie card) */
+.onboarding-banner {
+  position: relative; overflow: hidden;
+  border-bottom: 1px solid rgba(255,77,0,.28); padding: 14px 16px 16px;
+  background:
+    radial-gradient(ellipse 85% 50% at 95% 0%, rgba(255,77,0,.12), transparent 45%),
+    radial-gradient(ellipse 55% 65% at 0% 100%, rgba(0,144,255,.08), transparent 55%),
+    rgba(10,8,18,.98);
+}
+.onboarding-banner h2 { margin: 2px 0 10px; font: 700 16px/1.2 "Syne"; letter-spacing: -.3px; }
+.onboarding-banner .onboarding-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.onboarding-banner .onboarding-steps div { display: grid; gap: 3px; border-top: 1px solid rgba(255,77,0,.22); padding-top: 7px; }
+.onboarding-banner .onboarding-steps b { color: var(--fire); font: 800 9px "Syne"; }
+.onboarding-banner .onboarding-steps span { color: rgba(244,242,255,.65); font-size: 10px; }
+.onboarding-banner .onboarding-actions { display: flex; gap: 8px; }
+.onboarding-banner .onboarding-actions button { flex: 1; padding: 10px; font-size: 13px; }
+
 .onboarding-card {
   position: relative; overflow: hidden; margin-bottom: 12px;
-  border: 1px solid rgba(255,77,0,.32); border-radius: 24px; padding: 20px;
+  border: 1px solid rgba(255,77,0,.32); border-radius: 20px; padding: 16px;
   background:
-    radial-gradient(ellipse 85% 50% at 95% 0%, rgba(255,77,0,.2), transparent 45%),
-    radial-gradient(ellipse 55% 65% at 0% 100%, rgba(0,144,255,.14), transparent 55%),
+    radial-gradient(ellipse 85% 50% at 95% 0%, rgba(255,77,0,.15), transparent 45%),
+    radial-gradient(ellipse 55% 65% at 0% 100%, rgba(0,144,255,.1), transparent 55%),
     linear-gradient(145deg, rgba(14,10,22,.97), rgba(4,6,12,.99));
-  animation: heroBreath 5s ease-in-out infinite;
 }
 .onboarding-card::before {
   content: ''; position: absolute; left: 0; right: 0; height: 1px; top: 0;
   background: linear-gradient(90deg, transparent, rgba(255,77,0,.55), transparent);
 }
-.onboarding-card h2 { max-width: 340px; margin: 7px 0; font: 800 22px/1.1 "Syne"; letter-spacing: -.8px; }
-.onboarding-card p  { max-width: 600px; margin-bottom: 16px; color: rgba(244,242,255,.5); font-size: 12px; line-height: 1.6; }
+.onboarding-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.onboarding-card h2 { margin: 0 0 10px; font: 700 17px/1.2 "Syne"; letter-spacing: -.4px; }
+.onboarding-card p  { max-width: 600px; margin-bottom: 12px; color: rgba(244,242,255,.5); font-size: 12px; line-height: 1.6; }
 .dismiss-button {
-  position: absolute; right: 12px; top: 12px;
-  border: 0; background: rgba(255,255,255,.07); color: var(--muted);
-  font-size: 9px; font-weight: 700; border-radius: 8px; padding: 5px 8px;
+  border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.06); color: var(--muted2);
+  font-size: 11px; font-weight: 600; border-radius: 8px; padding: 4px 10px;
+  transition: background .15s, color .15s;
 }
+.dismiss-button:hover { background: rgba(255,255,255,.12); color: var(--ivory); }
 .onboarding-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-top: 14px; }
 .onboarding-steps div { display: grid; gap: 4px; border-top: 1px solid rgba(255,77,0,.28); padding-top: 9px; }
 .onboarding-steps b { color: var(--fire); font: 800 9px "Syne"; }
@@ -696,6 +714,19 @@ input:focus, select:focus, textarea:focus {
 .lock-card h1 { margin: 4px 0 0; font: 700 26px "Syne"; }
 .lock-card p  { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .form-error { border-radius: 10px; background: rgba(255,23,68,.1); color: #ff8099; padding: 9px; font-size: 11px; border: 1px solid rgba(255,23,68,.22); }
+.pin-hashing-status {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border-radius: 12px;
+  background: rgba(0,144,255,.08); border: 1px solid rgba(0,144,255,.22);
+  color: var(--blue2); font-size: 13px; font-weight: 500;
+}
+.pin-spinner {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid rgba(0,198,255,.2);
+  border-top-color: var(--blue2);
+  animation: spin .7s linear infinite; flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* ═══════════════════════════════════════════════════════
    MODAL

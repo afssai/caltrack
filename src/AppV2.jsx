@@ -594,11 +594,15 @@ function LockScreen({ mode, onUnlock, onSetup, owner }) {
   const [confirm, setConfirm] = useState("");
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
+  const [isHashing, setIsHashing] = useState(false);
   const submit = async (event) => {
     event.preventDefault();
     if (!/^\d{4,8}$/.test(pin)) return setError("Use a 4-8 digit PIN.");
     if (mode === "setup" && pin !== confirm) return setError("PIN confirmation does not match.");
+    setIsHashing(true);
+    setError("");
     const ok = mode === "setup" ? await onSetup(pin, email.trim()) : await onUnlock(pin);
+    setIsHashing(false);
     if (!ok) setError("Incorrect PIN.");
   };
   return (
@@ -615,10 +619,18 @@ function LockScreen({ mode, onUnlock, onSetup, owner }) {
         {mode === "setup" && (
           <Field label="Your email (shown on lock screen)" type="email" inputMode="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         )}
-        <Field label="PIN (4-8 digits)" type="password" inputMode="numeric" autoComplete="off" maxLength="8" value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ""))} />
-        {mode === "setup" && <Field label="Confirm PIN" type="password" inputMode="numeric" autoComplete="off" maxLength="8" value={confirm} onChange={(event) => setConfirm(event.target.value.replace(/\D/g, ""))} />}
+        <Field label="PIN (4-8 digits)" type="password" inputMode="numeric" autoComplete="off" maxLength="8" value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ""))} disabled={isHashing} />
+        {mode === "setup" && <Field label="Confirm PIN" type="password" inputMode="numeric" autoComplete="off" maxLength="8" value={confirm} onChange={(event) => setConfirm(event.target.value.replace(/\D/g, ""))} disabled={isHashing} />}
         {error && <div className="form-error">{error}</div>}
-        <button className="primary" type="submit">{mode === "setup" ? "Lock app with my PIN" : "Unlock"}</button>
+        {isHashing && (
+          <div className="pin-hashing-status" role="status" aria-live="polite">
+            <span className="pin-spinner" aria-hidden="true" />
+            <span>{mode === "setup" ? "Securing your PIN…" : "Verifying…"}</span>
+          </div>
+        )}
+        <button className="primary" type="submit" disabled={isHashing}>
+          {isHashing ? (mode === "setup" ? "Setting up…" : "Unlocking…") : (mode === "setup" ? "Lock app with my PIN" : "Unlock")}
+        </button>
       </form>
     </div>
   );
@@ -654,7 +666,7 @@ function WeightTrend({ measurements }) {
     .slice(-8);
 
   if (points.length < 2) {
-    return <div className="chart-empty"><strong>Build your trend</strong><span>Log weight on two dates to see movement.</span></div>;
+    return <div className="chart-empty"><strong>Build your trend</strong><span>Add two weight entries below to see your progress chart.</span></div>;
   }
 
   const weights = points.map((item) => number(item.weight));
@@ -998,6 +1010,7 @@ function AppV2Inner() {
   const [syncStatus, setSyncStatus] = useState(readSyncStatus);
   const [authEmail, setAuthEmail] = useState("");
   const [syncing, setSyncing] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [online, setOnline] = useState(() => navigator.onLine);
   const [cloudHealth, setCloudHealth] = useState({ status: "unchecked", message: "Not checked yet." });
   const [onboardingDismissed, setOnboardingDismissed] = useState(
@@ -2098,6 +2111,25 @@ function AppV2Inner() {
         {tab === "diary" && <p className="top-message">{todayMessage}</p>}
       </header>
 
+      {tab === "diary" && isNewUser && (
+        <div className="onboarding-banner">
+          <div className="onboarding-header">
+            <span className="eyebrow">Getting started</span>
+            <button className="dismiss-button" aria-label="Dismiss getting started" onClick={dismissOnboarding}>✕ Dismiss</button>
+          </div>
+          <h2>Log your first meal to get started.</h2>
+          <div className="onboarding-steps">
+            <div><b>1</b><span>Set goals in Profile</span></div>
+            <div><b>2</b><span>Log a meal</span></div>
+            <div><b>3</b><span>Track your progress</span></div>
+          </div>
+          <div className="onboarding-actions">
+            <button className="secondary" onClick={() => setTab("settings")}>Set goals</button>
+            <button className="primary" onClick={() => setTab("add")}>Log first food</button>
+          </div>
+        </div>
+      )}
+
       {tab === "diary" && <section className="calorie-card">
         {/* EKG heartbeat line */}
         <div className="ekg-wrap" aria-hidden="true">
@@ -2217,15 +2249,17 @@ function AppV2Inner() {
               ? " ✓ Done!"
               : ` — ${Math.max(0, waterHint - Math.round(dailyLog.water || 0))} ml left`}
           </div>
-          <div className={`hint-pill hint-deficit ${deficitStatus === "on track" ? "hint-good" : deficitStatus === "surplus" ? "hint-warn" : ""}`}>
-            {deficitStatus === "on track" && "🎯 "}
-            {deficitStatus === "surplus" && "⚠️ "}
-            {deficitStatus === "below target" && "📉 "}
-            Deficit: <strong>{Math.round(currentDeficit)} kcal</strong>
-            {deficitStatus === "on track" && " — on pace for ~0.5 kg/wk"}
-            {deficitStatus === "surplus" && " — over calories today"}
-            {deficitStatus === "below target" && ` — aim for ${safeDeficitTarget} kcal`}
-          </div>
+          {totals.calories > 0 && (
+            <div className={`hint-pill hint-deficit ${deficitStatus === "on track" ? "hint-good" : deficitStatus === "surplus" ? "hint-warn" : ""}`}>
+              {deficitStatus === "on track" && "🎯 "}
+              {deficitStatus === "surplus" && "⚠️ "}
+              {deficitStatus === "below target" && "📉 "}
+              Deficit: <strong>{Math.round(currentDeficit)} kcal</strong>
+              {deficitStatus === "on track" && " — on pace for ~0.5 kg/wk"}
+              {deficitStatus === "surplus" && " — over calories today"}
+              {deficitStatus === "below target" && ` — aim for ${safeDeficitTarget} kcal`}
+            </div>
+          )}
           {netRemaining > 0 && (
             <div className="hint-pill">
               🍽️ <strong>{Math.round(netRemaining)} kcal</strong> left to eat today{activityCalories > 0 ? ` (incl. ${activityCalories} burned)` : ""}
@@ -2243,24 +2277,6 @@ function AppV2Inner() {
       <main ref={mainRef}>
         {tab === "diary" && (
           <section className="panel">
-            {isNewUser && (
-              <div className="onboarding-card">
-                <button className="dismiss-button" aria-label="Dismiss getting started" onClick={dismissOnboarding}>Close</button>
-                <span className="eyebrow">Welcome to PULSE</span>
-                <h2>Start with one honest entry.</h2>
-                <p>Start locally, then sign in with email when you want cloud backup across your own devices. Set your targets, log your first meal, and your dashboard becomes useful immediately.</p>
-                <div className="onboarding-steps">
-                  <div><b>01</b><span>Set daily goals</span></div>
-                  <div><b>02</b><span>Log a meal</span></div>
-                  <div><b>03</b><span>Track progress</span></div>
-                </div>
-                <div className="onboarding-actions">
-                  <button className="secondary" onClick={() => setTab("settings")}>Set goals</button>
-                  <button className="primary" onClick={() => setTab("add")}>Log first food</button>
-                </div>
-              </div>
-            )}
-
             <div className="dashboard-grid dashboard-grid-primary">
               <div className="insight-card calorie-history">
                 <div className="insight-heading"><div><span className="eyebrow">Last 7 days</span><h3>Calorie rhythm</h3></div><strong>{Math.round(totals.calories)}<small> kcal today</small></strong></div>
@@ -3005,9 +3021,7 @@ function AppV2Inner() {
               <button className="secondary" onClick={exportData}>Export backup</button>
               <button className="secondary" onClick={() => importRef.current?.click()}>Import backup</button>
               <input ref={importRef} hidden type="file" accept="application/json" onChange={(event) => importData(event.target.files?.[0])} />
-              <button className="danger-button" onClick={() => {
-                if (window.confirm("Delete all PULSE data stored in this browser?")) setData(defaultData);
-              }}>Delete all local data</button>
+              <button className="danger-button" onClick={() => setDeleteConfirm(true)}>Delete all local data</button>
             </div>
             <div className="helper" style={{fontSize:"11px",padding:"0 4px"}}>Your data lives on this device. Cloud backup is optional. The PIN is a screen lock only.</div>
           </section>
@@ -3034,12 +3048,26 @@ function AppV2Inner() {
         </div>
       )}
 
+      {deleteConfirm && (
+        <div className="modal-backdrop" onClick={() => setDeleteConfirm(false)}>
+          <section className="modal" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title" onClick={(e) => e.stopPropagation()}>
+            <span className="eyebrow crimson">Destructive action</span>
+            <h2 id="delete-confirm-title">Delete all data?</h2>
+            <p className="helper" style={{marginBottom:"1rem"}}>This will permanently erase all your food logs, measurements, goals, and settings from this device. This cannot be undone.</p>
+            <div className="modal-actions">
+              <button className="secondary" onClick={() => setDeleteConfirm(false)}>Cancel</button>
+              <button className="danger-button" onClick={() => { setData(defaultData); setDeleteConfirm(false); }}>Yes, delete everything</button>
+            </div>
+          </section>
+        </div>
+      )}
+
       <nav className="bottom-nav" aria-label="Primary navigation">
         {[
           ["diary", "Today", <CalendarDays size={22} strokeWidth={1.8} />],
           ["add", "Add", <Plus size={24} strokeWidth={2} />],
           ["tools", "Scan", <ScanLine size={20} strokeWidth={1.8} />],
-          ["log", "Log", <List size={20} strokeWidth={1.8} />],
+          ["log", "Diary", <List size={20} strokeWidth={1.8} />],
           ["progress", "Progress", <Activity size={20} strokeWidth={1.8} />],
           ["settings", "Profile", <User size={20} strokeWidth={1.8} />],
         ].map(([key, label, icon]) => (
