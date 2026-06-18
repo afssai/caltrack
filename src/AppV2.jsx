@@ -139,16 +139,58 @@ function calcBurnedCalories(type, minutes, weightKg) {
   const w = weightKg > 0 ? weightKg : 70;
   return Math.round((met * 3.5 * w * minutes) / 200);
 }
-function calcBMR(p) {
+// Navy body-fat formula (base-10 log, cm inputs)
+function calcBodyFat(p) {
+  const waist = number(p.waist), neck = number(p.neck), height = number(p.height);
+  if (!waist || !neck || !height || waist <= neck) return null;
+  if (p.gender === "female") {
+    const hip = number(p.hip);
+    if (!hip) return null;
+    const val = 495 / (1.29579 - 0.35004 * Math.log10(waist + hip - neck) + 0.22100 * Math.log10(height)) - 450;
+    return Math.round(val * 10) / 10;
+  }
+  const val = 495 / (1.0324 - 0.19077 * Math.log10(waist - neck) + 0.15456 * Math.log10(height)) - 450;
+  return Math.round(val * 10) / 10;
+}
+function calcLeanMass(p) {
+  const bf = calcBodyFat(p);
+  const w = number(p.weight);
+  if (bf === null || !w) return null;
+  return Math.round((w * (1 - bf / 100)) * 10) / 10;
+}
+function calcFatMass(p) {
+  const lean = calcLeanMass(p);
+  const w = number(p.weight);
+  if (lean === null || !w) return null;
+  return Math.round((w - lean) * 10) / 10;
+}
+function calcBMRMifflin(p) {
   const w = number(p.weight), h = number(p.height), a = number(p.age);
   if (!w || !h || !a) return 0;
   return Math.round(p.gender === "female" ? 10 * w + 6.25 * h - 5 * a - 161 : 10 * w + 6.25 * h - 5 * a + 5);
 }
+function calcBMRKatch(p) {
+  const lean = calcLeanMass(p);
+  if (!lean) return 0;
+  return Math.round(370 + 21.6 * lean);
+}
+// Primary BMR: Katch-McArdle when lean mass known, else Mifflin
+function calcBMR(p) {
+  return calcBMRKatch(p) || calcBMRMifflin(p);
+}
 function calcTDEE(p) {
   const bmr = calcBMR(p);
   if (!bmr) return 0;
-  const factors = { sedentary: 1.2, light: 1.375, moderate: 1.55, active: 1.725, very_active: 1.9 };
-  return Math.round(bmr * (factors[p.activityLevel] || 1.2));
+  const factors = { sedentary: 1.2, light: 1.375, moderate: 1.55, active: 1.725 };
+  return Math.round(bmr * (factors[p.activityLevel] || 1.375));
+}
+function calcDailyTarget(p) {
+  const tdee = calcTDEE(p);
+  if (!tdee) return number(p.calorieTarget) || 2000;
+  if (p.goalMode === "maintain") return tdee;
+  const deficit = number(p.deficitRate) || 500;
+  const bmrFloor = calcBMRKatch(p) || calcBMRMifflin(p) || 1200;
+  return Math.max(bmrFloor, tdee - deficit);
 }
 
 const defaultData = {
@@ -159,8 +201,13 @@ const defaultData = {
     age: "",
     height: "",
     weight: "",
+    waist: "",
+    neck: "",
+    hip: "",
     highestWeight: "",
-    activityLevel: "sedentary",
+    activityLevel: "light",
+    goalMode: "lose",
+    deficitRate: 500,
     medicalConditions: "",
     medications: "",
     calorieTarget: 2000,
@@ -879,7 +926,7 @@ function AppV2Inner() {
   useEffect(() => {
     const eaten = data.diary[date] ? data.diary[date].reduce((s, e) => s + number(e.calories), 0) : 0;
     const burned = (data.dailyLogs[date]?.activities || []).reduce((s, a) => s + calcBurnedCalories(a.type, number(a.minutes), number(data.profile.weight)), 0);
-    const target = Math.abs(Math.round(number(data.profile.calorieTarget) - eaten + burned));
+    const target = Math.abs(Math.round(calcDailyTarget(data.profile) - eaten + burned));
     const start = displayCalories;
     const delta = target - start;
     if (Math.abs(delta) < 1) { setDisplayCalories(target); return; }
@@ -895,7 +942,7 @@ function AppV2Inner() {
     calAnimRef.current = requestAnimationFrame(step);
     return () => { if (calAnimRef.current) cancelAnimationFrame(calAnimRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data.diary[date], data.profile.calorieTarget, data.dailyLogs[date]?.activities]);
+  }, [data.diary[date], data.profile, data.dailyLogs[date]?.activities]);
 
   // GSAP slide-in animation on tab change
   useEffect(() => {
@@ -933,7 +980,7 @@ function AppV2Inner() {
   const [pantryDraft, setPantryDraft] = useState({ name: "", grams: 100, confidence: "manual", ...EMPTY_NUTRITION });
   const [recipeDraft, setRecipeDraft] = useState({ title: "", type: "breakfast", steps: "", reason: "", items: [] });
   const [editingPantryId, setEditingPantryId] = useState("");
-  const [measurement, setMeasurement] = useState({ weight: "", waist: "" });
+  const [measurement, setMeasurement] = useState({ weight: "", waist: "", neck: "" });
   const [ocrText, setOcrText] = useState("");
   const [ocrProgress, setOcrProgress] = useState(0);
   const [aiPhotoResult, setAiPhotoResult] = useState("");
@@ -1079,7 +1126,17 @@ function AppV2Inner() {
     acc[item.type] = (acc[item.type] || 0) + number(item.minutes);
     return acc;
   }, {});
-  const remaining = number(data.profile.calorieTarget) - totals.calories;
+  const dailyTarget = calcDailyTarget(data.profile);
+  const bmrVal = calcBMR(data.profile);
+  const tdeeVal = calcTDEE(data.profile);
+  const bodyFatPct = calcBodyFat(data.profile);
+  const leanMassKg = calcLeanMass(data.profile);
+  const fatMassKg = calcFatMass(data.profile);
+  const isCappedAtBMR = tdeeVal > 0 && data.profile.goalMode !== "maintain" && (tdeeVal - (number(data.profile.deficitRate) || 500)) < bmrVal;
+  const projectedWeeklyLoss = tdeeVal > 0 && data.profile.goalMode !== "maintain"
+    ? Math.round(((tdeeVal - dailyTarget) * 7 / 7700) * 10) / 10
+    : 0;
+  const remaining = dailyTarget - totals.calories;
   const netRemaining = remaining + activityCalories;
   const estimatedDeficit = Math.max(0, netRemaining);
 
@@ -1106,8 +1163,8 @@ function AppV2Inner() {
     : currentDeficit > 0
     ? "below target"
     : "surplus";
-  const caloriePercent = data.profile.calorieTarget
-    ? Math.min(100, (totals.calories / number(data.profile.calorieTarget)) * 100)
+  const caloriePercent = dailyTarget
+    ? Math.min(100, (totals.calories / dailyTarget) * 100)
     : 0;
   const sortedMeasurements = useMemo(
     () => [...data.measurements].sort((a, b) => b.date.localeCompare(a.date)),
@@ -1423,7 +1480,7 @@ function AppV2Inner() {
     flash(`${food.name} added to ${meal.toLowerCase()}.`);
     // Celebrate when hitting calorie goal
     try {
-      const goal = number(data.profile.calorieTarget);
+      const goal = calcDailyTarget(data.profile);
       if (goal > 0 && nextCalories >= goal * 0.98 && nextCalories <= goal * 1.05 && window.confetti) {
         window.confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 }, colors: ["#FF4500","#FF7A00","#00E5FF","#A78BFA"] });
       }
@@ -1737,7 +1794,7 @@ function AppV2Inner() {
           mode: "meal-photo",
           image: imageData,
           text: mealDescription.trim() || undefined,
-          daily: { totals, calorieTarget: data.profile.calorieTarget },
+          daily: { totals, calorieTarget: dailyTarget },
           pantry: data.pantry,
         }),
       });
@@ -1799,7 +1856,7 @@ function AppV2Inner() {
       const response = await fetch("/api/gemini", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "portion", text: mealDescription.trim(), daily: { totals, calorieTarget: data.profile.calorieTarget } }),
+        body: JSON.stringify({ mode: "portion", text: mealDescription.trim(), daily: { totals, calorieTarget: dailyTarget } }),
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
@@ -1834,7 +1891,7 @@ function AppV2Inner() {
             items,
             totals,
             targets: {
-              calories: data.profile.calorieTarget,
+              calories: dailyTarget,
               protein: data.profile.proteinTarget,
               carbs: data.profile.carbsTarget,
               fat: data.profile.fatTarget,
@@ -1894,20 +1951,32 @@ function AppV2Inner() {
   }
 
   function saveMeasurement() {
-    if (number(measurement.weight) <= 0 && number(measurement.waist) <= 0) {
-      return flash("Enter weight, waist, or both.");
+    if (number(measurement.weight) <= 0 && number(measurement.waist) <= 0 && number(measurement.neck) <= 0) {
+      return flash("Enter at least one measurement.");
+    }
+    const waistN = number(measurement.waist), neckN = number(measurement.neck);
+    if (waistN > 0 && neckN > 0 && waistN <= neckN) {
+      return flash("Waist must be greater than neck. Check your measurements.");
     }
     const entry = {
       id: makeId(),
       date,
       weight: number(measurement.weight) > 0 ? round(measurement.weight) : "",
-      waist: number(measurement.waist) > 0 ? round(measurement.waist) : "",
+      waist: waistN > 0 ? round(measurement.waist) : "",
+      neck: neckN > 0 ? round(measurement.neck) : "",
     };
-    setData((current) => ({
-      ...current,
-      measurements: [...current.measurements.filter((item) => item.date !== date), entry],
-    }));
-    setMeasurement({ weight: "", waist: "" });
+    setData((current) => {
+      const profilePatch = {};
+      if (waistN > 0) profilePatch.waist = entry.waist;
+      if (neckN > 0) profilePatch.neck = entry.neck;
+      if (number(measurement.weight) > 0) profilePatch.weight = entry.weight;
+      return {
+        ...current,
+        measurements: [...current.measurements.filter((item) => item.date !== date), entry],
+        profile: Object.keys(profilePatch).length ? { ...current.profile, ...profilePatch } : current.profile,
+      };
+    });
+    setMeasurement({ weight: "", waist: "", neck: "" });
     flash(`Measurement saved for ${date}.`);
   }
 
@@ -1976,12 +2045,14 @@ function AppV2Inner() {
   const weeklyProteinAverage = round(recentTotals.reduce((sum, item) => sum + item.protein, 0) / 7);
   const monthlyTotals = Array.from({ length: 30 }, (_, index) => totalsFor(data.diary[dateOffset(index - 29)] || []));
   const monthlyAverage = round(monthlyTotals.reduce((sum, item) => sum + item.calories, 0) / 30);
+  const proteinFloorMin = leanMassKg ? Math.round(leanMassKg * 1.6) : number(data.profile.proteinTarget);
   const coach = [
-    totals.protein < number(data.profile.proteinTarget) * 0.75 && { title: "Protein goal not reached", body: `You are ${round(number(data.profile.proteinTarget) - totals.protein)}g short. Greek yogurt, eggs, tofu, fish, or lean meat can help.` },
+    totals.calories > 0 && bmrVal > 0 && totals.calories < bmrVal && { title: "Under your resting burn today", body: `You've logged ${Math.round(totals.calories)} kcal — below your BMR of ${bmrVal} kcal. Eat a bit more to protect muscle and metabolism.` },
+    totals.protein < proteinFloorMin * 0.75 && { title: "Protein goal not reached", body: `You are ${Math.round(proteinFloorMin - totals.protein)}g short of the ${proteinFloorMin}g floor (1.6 g/kg lean mass). Greek yogurt, eggs, tofu, fish, or lean meat can help.` },
     totals.fiber < number(data.profile.fiberTarget) * 0.75 && { title: "Fiber goal not reached", body: `You are ${round(number(data.profile.fiberTarget) - totals.fiber)}g short. Try beans, oats, berries, vegetables, or whole grains.` },
     dailyLog.water < number(data.profile.waterTarget) * 0.7 && { title: "Water intake is low", body: `Log another ${Math.max(0, number(data.profile.waterTarget) - number(dailyLog.water))} ml to reach today's target.` },
-    totals.calories > number(data.profile.calorieTarget) * 1.15 && { title: "Calories above target", body: "Review portions and high-calorie extras. One day does not define progress." },
-    totals.calories > 0 && totals.calories < number(data.profile.calorieTarget) * 0.55 && { title: "Calories are quite low", body: "Make sure your intake is sustainable and nutritionally complete." },
+    totals.calories > dailyTarget * 1.15 && { title: "Calories above target", body: "Review portions and high-calorie extras. One day does not define progress." },
+    totals.calories > 0 && totals.calories < dailyTarget * 0.55 && { title: "Calories are quite low", body: "Make sure your intake is sustainable and nutritionally complete." },
   ].filter(Boolean);
   const weightPoints = [...data.measurements].filter((item) => number(item.weight) > 0).sort((a, b) => a.date.localeCompare(b.date));
   const weightChange = weightPoints.length > 1 ? number(weightPoints.at(-1).weight) - number(weightPoints[0].weight) : 0;
@@ -2013,12 +2084,13 @@ function AppV2Inner() {
           <span className="eyebrow">Today's energy</span>
           <strong className={netRemaining < 0 ? "cal-over" : ""}>{displayCalories}</strong>
           <small>{netRemaining >= 0 ? "kcal left today" : "over target"}</small>
-          <div className="calorie-equation"><span>{Math.round(totals.calories)} food</span><i /><span>{number(data.profile.calorieTarget)} plan</span>{activityCalories > 0 && <><i /><span>{activityCalories} burn</span></>}</div>
+          {projectedWeeklyLoss > 0 && <span className="cal-projection">~{projectedWeeklyLoss} kg/week loss pace</span>}
+          <div className="calorie-equation"><span>{Math.round(totals.calories)} food</span><i /><span>{dailyTarget} target</span>{activityCalories > 0 && <><i /><span>{activityCalories} burn</span></>}</div>
         </div>
         <CalorieRing
           consumed={Math.round(totals.calories)}
           burned={activityCalories}
-          target={number(data.profile.calorieTarget)}
+          target={dailyTarget}
           percent={caloriePercent}
         />
       </section>}
@@ -2034,6 +2106,35 @@ function AppV2Inner() {
           flash={flash}
           setData={setData}
         />
+      )}
+
+      {tab === "diary" && bodyFatPct !== null && (
+        <section className="body-comp-card">
+          <div className="bc-header">
+            <span className="eyebrow violet">Body composition</span>
+            <span className="bc-bf">{bodyFatPct}% fat <span className="bc-note">(±3–4%)</span></span>
+          </div>
+          <div className="bc-bar-wrap">
+            <div className="bc-bar">
+              <div className="bc-fat-seg" style={{ width: `${bodyFatPct}%` }}>
+                <span className="bc-seg-label">{fatMassKg} kg fat</span>
+              </div>
+              <div className="bc-lean-seg" style={{ width: `${100 - bodyFatPct}%` }}>
+                <span className="bc-seg-label">{leanMassKg} kg lean</span>
+              </div>
+            </div>
+          </div>
+          <div className="bc-stats">
+            <div><span>Fat mass</span><strong>{fatMassKg} kg ({bodyFatPct}%)</strong></div>
+            <div><span>Lean mass</span><strong>{leanMassKg} kg ({Math.round((100 - bodyFatPct) * 10) / 10}%)</strong></div>
+            {leanMassKg && <div><span>Protein floor</span><strong>{Math.round(leanMassKg * 1.6)}–{Math.round(leanMassKg * 2.0)} g/day</strong></div>}
+          </div>
+          {bmrVal > 0 && <div className="bc-ref">BMR {bmrVal} kcal · TDEE {tdeeVal} kcal <span className="bc-ref-note">— maintenance, not your eating target</span></div>}
+        </section>
+      )}
+
+      {tab === "diary" && isCappedAtBMR && (
+        <div className="bmr-cap-notice">⚠️ Capped at your resting burn ({bmrVal} kcal). To lose faster, add activity — don&apos;t eat below this.</div>
       )}
 
       {tab === "diary" && (
@@ -2136,7 +2237,7 @@ function AppV2Inner() {
             <div className="dashboard-grid dashboard-grid-primary">
               <div className="insight-card calorie-history">
                 <div className="insight-heading"><div><span className="eyebrow">Last 7 days</span><h3>Calorie rhythm</h3></div><strong>{Math.round(totals.calories)}<small> kcal today</small></strong></div>
-                <CalorieChart diary={data.diary} target={data.profile.calorieTarget} />
+                <CalorieChart diary={data.diary} target={dailyTarget} />
               </div>
             </div>
 
@@ -2685,7 +2786,7 @@ function AppV2Inner() {
 
         {tab === "progress" && (
           <section className="panel stack">
-            <div className="section-heading"><div><span className="eyebrow">By date</span><h2><Scale size={18} style={{verticalAlign:"middle",marginRight:6,color:"var(--accent-good)"}} />Weight & waist</h2></div></div>
+            <div className="section-heading"><div><span className="eyebrow">By date</span><h2><Scale size={18} style={{verticalAlign:"middle",marginRight:6,color:"var(--accent-good)"}} />Weight, Waist & Neck</h2></div></div>
             <div className="insight-card">
               <div className="insight-heading"><div><span className="eyebrow violet">Recent entries</span><h3>Weight trend</h3></div><strong>{latestMeasurement?.weight || "--"}<small>{latestMeasurement?.weight ? " kg" : ""}</small></strong></div>
               <WeightTrend measurements={data.measurements} />
@@ -2697,14 +2798,19 @@ function AppV2Inner() {
             <div className="stat-grid">
               <div><span>Latest weight</span><strong>{latestMeasurement?.weight ? `${latestMeasurement.weight} kg` : "--"}</strong></div>
               <div><span>Latest waist</span><strong>{latestMeasurement?.waist ? `${latestMeasurement.waist} cm` : "--"}</strong></div>
+              <div><span>Latest neck</span><strong>{latestMeasurement?.neck ? `${latestMeasurement.neck} cm` : "--"}</strong></div>
               <div><span>Goal weight</span><strong>{data.profile.goalWeight ? `${data.profile.goalWeight} kg` : "--"}</strong></div>
+              {bodyFatPct !== null && <div><span>Body fat %</span><strong>{bodyFatPct}% <span style={{fontSize:"11px",opacity:.6}}>(±3–4%)</span></strong></div>}
+              {leanMassKg !== null && <div><span>Lean mass</span><strong>{leanMassKg} kg</strong></div>}
             </div>
             <div className="summary-grid">
               <div className="calculation"><div><span>7-day calorie average</span><strong>{weeklyAverage} kcal</strong></div><div><span>7-day protein average</span><strong>{weeklyProteinAverage}g</strong></div><div><span>30-day calorie average</span><strong>{monthlyAverage} kcal</strong></div><div><span>Weight remaining</span><strong>{remainingWeight === null ? "--" : `${remainingWeight} kg`}</strong></div><div><span>Estimated goal date</span><strong>{estimatedGoalDate || "Need a stable downward trend"}</strong></div></div>
             </div>
+            <p className="helper">Log weight, waist and neck together to track body fat % (U.S. Navy formula). Waist must be larger than neck.</p>
             <div className="form-grid">
               <Field label={`Weight on ${date}`} suffix="kg" type="number" min="0" step="0.1" value={measurement.weight} onChange={(event) => setMeasurement((current) => ({ ...current, weight: event.target.value }))} />
               <Field label={`Waist on ${date}`} suffix="cm" type="number" min="0" step="0.1" value={measurement.waist} onChange={(event) => setMeasurement((current) => ({ ...current, waist: event.target.value }))} />
+              <Field label={`Neck on ${date}`} suffix="cm" type="number" min="0" step="0.1" value={measurement.neck} onChange={(event) => setMeasurement((current) => ({ ...current, neck: event.target.value }))} />
             </div>
             <button className="primary" onClick={saveMeasurement}>Save measurement</button>
             <div className="history">
@@ -2712,7 +2818,8 @@ function AppV2Inner() {
                 <article className="history-row" key={item.id}>
                   <strong>{item.date}</strong>
                   <span>{item.weight ? `${item.weight} kg` : "No weight"}</span>
-                  <span>{item.waist ? `${item.waist} cm waist` : "No waist"}</span>
+                  <span>{item.waist ? `${item.waist} cm waist` : ""}</span>
+                  <span>{item.neck ? `${item.neck} cm neck` : ""}</span>
                   <button className="text-button danger-text" onClick={() => deleteMeasurement(item.id)}>Delete</button>
                 </article>
               ))}
@@ -2741,37 +2848,73 @@ function AppV2Inner() {
 
             <div className="tool-card profile-card">
               <div className="section-heading"><div><span className="eyebrow crimson">Step 1 — About you</span><h2><User size={18} style={{verticalAlign:"middle",marginRight:6,color:"var(--accent-warm)"}} />Personal profile</h2></div></div>
-              <p className="helper">Your stats calculate calorie and macro targets using the Mifflin-St Jeor formula — the same one dietitians use. Leave blank if you prefer to set targets manually.</p>
+              <p className="helper">Fill in waist + neck to unlock body-fat tracking (U.S. Navy method) and the more accurate Katch-McArdle BMR. Height, age and weight are needed for Mifflin fallback.</p>
               <div className="form-grid">
                 <Field label="Your name" value={data.profile.name || ""} onChange={(event) => setProfile({ name: event.target.value })} />
                 <label className="field"><span>Biological sex</span><select value={data.profile.gender || ""} onChange={(event) => setProfile({ gender: event.target.value })}><option value="">Select…</option><option value="male">Male</option><option value="female">Female</option></select></label>
                 <Field label="Age" suffix="yrs" type="number" min="10" max="120" value={data.profile.age || ""} onChange={(event) => setProfile({ age: number(event.target.value) })} />
                 <Field label="Height" suffix="cm" type="number" min="100" max="250" value={data.profile.height || ""} onChange={(event) => setProfile({ height: number(event.target.value) })} />
                 <Field label="Current weight" suffix="kg" type="number" min="30" step="0.1" value={data.profile.weight || ""} onChange={(event) => setProfile({ weight: event.target.value })} />
+                <Field label="Waist circumference" suffix="cm" type="number" min="40" max="200" step="0.5" value={data.profile.waist || ""} onChange={(event) => setProfile({ waist: event.target.value })} />
+                <Field label="Neck circumference" suffix="cm" type="number" min="20" max="80" step="0.5" value={data.profile.neck || ""} onChange={(event) => setProfile({ neck: event.target.value })} />
+                {data.profile.gender === "female" && <Field label="Hip circumference" suffix="cm" type="number" min="50" max="200" step="0.5" value={data.profile.hip || ""} onChange={(event) => setProfile({ hip: event.target.value })} />}
                 <Field label="Highest ever weight" suffix="kg" type="number" min="30" step="0.1" value={data.profile.highestWeight || ""} onChange={(event) => setProfile({ highestWeight: event.target.value })} />
                 <Field label="Goal weight" suffix="kg" type="number" min="30" step="0.1" value={data.profile.goalWeight || ""} onChange={(event) => setProfile({ goalWeight: event.target.value })} />
-                <label className="field"><span>Activity level</span><select value={data.profile.activityLevel || "sedentary"} onChange={(event) => setProfile({ activityLevel: event.target.value })}><option value="sedentary">Sedentary (desk job, little exercise)</option><option value="light">Light active (1-3 workouts/week)</option><option value="moderate">Moderately active (3-5 workouts/week)</option><option value="active">Very active (6-7 workouts/week)</option><option value="very_active">Extra active (physical job + training)</option></select></label>
+                <label className="field"><span>Activity level</span>
+                  <select value={data.profile.activityLevel || "light"} onChange={(event) => setProfile({ activityLevel: event.target.value })}>
+                    <option value="sedentary">Sedentary ×1.2 — desk job, little movement</option>
+                    <option value="light">Light ×1.375 — 1–3 workouts/week</option>
+                    <option value="moderate">Moderate ×1.55 — 3–5 workouts/week</option>
+                    <option value="active">Very active ×1.725 — 6–7 workouts/week</option>
+                  </select>
+                </label>
+                <label className="field"><span>Goal</span>
+                  <select value={data.profile.goalMode || "lose"} onChange={(event) => setProfile({ goalMode: event.target.value })}>
+                    <option value="lose">Lose weight</option>
+                    <option value="maintain">Maintain weight</option>
+                  </select>
+                </label>
+                {(data.profile.goalMode || "lose") === "lose" && (
+                  <label className="field"><span>Loss rate</span>
+                    <select
+                      value={[250,500,750].includes(number(data.profile.deficitRate ?? 500)) ? String(data.profile.deficitRate ?? 500) : "custom"}
+                      onChange={(event) => setProfile({ deficitRate: event.target.value === "custom" ? 400 : number(event.target.value) })}
+                    >
+                      <option value="250">Gentle — −250 kcal/day (~0.2 kg/week)</option>
+                      <option value="500">Steady — −500 kcal/day (~0.5 kg/week)</option>
+                      <option value="750">Faster — −750 kcal/day (~0.7 kg/week)</option>
+                      <option value="custom">Custom deficit</option>
+                    </select>
+                  </label>
+                )}
+                {(data.profile.goalMode || "lose") === "lose" && [250, 500, 750].indexOf(number(data.profile.deficitRate ?? 500)) === -1 && (
+                  <Field label="Custom deficit" suffix="kcal/day" type="number" min="100" max="1200" value={data.profile.deficitRate || ""} onChange={(event) => setProfile({ deficitRate: number(event.target.value) })} />
+                )}
                 <label className="field" style={{gridColumn:"1/-1"}}><span>Medical conditions / health notes</span><textarea value={data.profile.medicalConditions || ""} onChange={(event) => setProfile({ medicalConditions: event.target.value })} placeholder="e.g. Type 2 diabetes, hypertension, high cholesterol, PCOS, thyroid condition..." /></label>
                 <label className="field" style={{gridColumn:"1/-1"}}><span>Medications / supplements checklist</span><textarea value={data.profile.medications || ""} onChange={(event) => setProfile({ medications: event.target.value })} placeholder="One per line, e.g. Metformin, Vitamin D, Fish oil..." /></label>
               </div>
-              {calcBMR(data.profile) > 0 && (
+              {bmrVal > 0 && (
                 <div className="calculation bmr-result">
-                  <div><span>Your BMR (at rest)</span><strong>{calcBMR(data.profile)} kcal</strong></div>
-                  <div><span>Maintenance calories (TDEE)</span><strong>{calcTDEE(data.profile)} kcal</strong></div>
-                  <div><span>For weight loss (−500 kcal)</span><strong>{Math.max(1200, calcTDEE(data.profile) - 500)} kcal</strong></div>
+                  {calcBMRKatch(data.profile) > 0 && <div><span>BMR — Katch-McArdle (primary)</span><strong>{calcBMRKatch(data.profile)} kcal</strong></div>}
+                  {calcBMRMifflin(data.profile) > 0 && <div><span>BMR — Mifflin-St Jeor {calcBMRKatch(data.profile) > 0 ? "(secondary)" : "(primary)"}</span><strong>{calcBMRMifflin(data.profile)} kcal</strong></div>}
+                  {bodyFatPct !== null && <div><span>Body fat % (Navy)</span><strong>{bodyFatPct}% <span style={{fontSize:"11px",opacity:.6}}>(±3–4%)</span></strong></div>}
+                  {leanMassKg !== null && <div><span>Lean mass / Fat mass</span><strong>{leanMassKg} kg / {fatMassKg} kg</strong></div>}
+                  <div><span>TDEE — maintenance (not your eating target)</span><strong>{tdeeVal} kcal</strong></div>
+                  <div><span>Daily eating target</span><strong>{dailyTarget} kcal {isCappedAtBMR ? "⚠️ (capped at BMR)" : ""}</strong></div>
+                  {projectedWeeklyLoss > 0 && <div><span>Projected loss</span><strong>~{projectedWeeklyLoss} kg/week</strong></div>}
                 </div>
               )}
               <button className="primary" onClick={() => {
                 const tdee = calcTDEE(data.profile);
                 if (!tdee) { flash("Fill in sex, age, height, and weight to auto-calculate."); return; }
+                const lean = calcLeanMass(data.profile);
                 const w = number(data.profile.weight);
-                const cal = data.profile.goalWeight && number(data.profile.goalWeight) < w ? Math.max(1200, tdee - 500) : tdee;
-                const proteinG = Math.round(w * 1.8);
-                const fatG = Math.round(cal * 0.28 / 9);
-                const carbsG = Math.max(50, Math.round((cal - proteinG * 4 - fatG * 9) / 4));
-                setProfile({ calorieTarget: cal, proteinTarget: proteinG, carbsTarget: carbsG, fatTarget: fatG, fiberTarget: 30 });
-                flash("Targets calculated from your profile and goal weight.");
-              }}>Calculate my targets automatically</button>
+                const proteinG = lean ? Math.round(lean * 1.8) : Math.round(w * 1.8);
+                const fatG = Math.round(dailyTarget * 0.28 / 9);
+                const carbsG = Math.max(50, Math.round((dailyTarget - proteinG * 4 - fatG * 9) / 4));
+                setProfile({ calorieTarget: dailyTarget, proteinTarget: proteinG, carbsTarget: carbsG, fatTarget: fatG, fiberTarget: 30 });
+                flash("Targets calculated — protein based on lean mass.");
+              }}>Apply calculated targets</button>
             </div>
 
             <div className="tool-card">

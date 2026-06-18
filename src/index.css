@@ -2218,6 +2218,40 @@ input:focus, select:focus, textarea:focus {
 }
 
 /* ── Weight Journey Card ─────────────────────────────────────────────────── */
+/* ── Body composition card ────────────────────────────────────────────────── */
+.body-comp-card {
+  margin: 0 12px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 14px 16px 12px;
+}
+.bc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.bc-bf { font-size: 15px; font-weight: 700; color: var(--text); }
+.bc-note { font-size: 10px; font-weight: 400; opacity: .5; }
+.bc-bar-wrap { margin-bottom: 10px; }
+.bc-bar { display: flex; height: 26px; border-radius: 8px; overflow: hidden; }
+.bc-fat-seg { background: linear-gradient(90deg, #ff7043, #ffb347); display: flex; align-items: center; justify-content: center; min-width: 36px; }
+.bc-lean-seg { background: linear-gradient(90deg, #4dc37f, #00c6ff); display: flex; align-items: center; justify-content: flex-end; min-width: 36px; }
+.bc-seg-label { font-size: 10px; font-weight: 700; color: #fff; padding: 0 6px; white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,.4); }
+.bc-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin-bottom: 8px; }
+.bc-stats > div { display: flex; flex-direction: column; }
+.bc-stats span { font-size: 10px; opacity: .5; }
+.bc-stats strong { font-size: 13px; font-weight: 700; }
+.bc-ref { font-size: 10px; opacity: .45; line-height: 1.4; }
+.bc-ref-note { opacity: .7; }
+.bmr-cap-notice {
+  margin: 0 12px 8px;
+  background: rgba(255,176,51,.1);
+  border: 1px solid rgba(255,176,51,.35);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #ffb033;
+}
+.cal-projection { display: block; font-size: 11px; opacity: .65; margin: 1px 0 2px; }
+/* ── ─────────────────────────────────────────────────────────────────────── */
+
 .wj-card {
   margin: 0 12px 8px;
   background: var(--surface);
