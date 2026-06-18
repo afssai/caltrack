@@ -1074,7 +1074,7 @@ function AppV2Inner() {
     if (autoSyncTimer.current) clearTimeout(autoSyncTimer.current);
     autoSyncTimer.current = setTimeout(() => {
       syncCalTrack(loadData(), { quiet: true }).catch(() => {});
-    }, 8000);
+    }, 1500);
     return () => clearTimeout(autoSyncTimer.current);
   }, [data, cloudSession, locked]);
 
