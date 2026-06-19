@@ -155,7 +155,7 @@ function WeightJourneyCard({ entries, highestWeight, currentWeight, goalWeight: 
           <input type="date" className="ws-date-input" id="wj-log-date" defaultValue={today} max={today} />
           <button className="primary ws-save-btn" onClick={() => {
             const w = parseFloat(quickInput);
-            if (!w || w < 20 || w > 300) { flash("Enter a valid weight (20â€“300 kg)."); return; }
+            if (!w || w < 20 || w > 300) { flash("Enter a valid weight (20-300 kg)."); return; }
             const dateEl = /** @type {HTMLInputElement | null} */ (document.getElementById("wj-log-date"));
             const logDate = (dateEl && dateEl.value) ? dateEl.value : today;
             setData((d) => ({
@@ -166,7 +166,7 @@ function WeightJourneyCard({ entries, highestWeight, currentWeight, goalWeight: 
             setQuickInput("");
             flash(logDate === today ? "Weight logged!" : `Weight logged for ${logDate}.`);
           }}>Save</button>
-          <button className="secondary ws-cancel-btn" onClick={() => setQuickInput("")}>âœ•</button>
+          <button className="secondary ws-cancel-btn" onClick={() => setQuickInput("")}>x</button>
         </div>
       )}
 
@@ -308,7 +308,7 @@ function _ActivityCard({ dailyLog, patchDailyLog, weightKg }) {
             <div key={a.id} className="activity-row">
               <span>{a.name}</span>
               <span className="activity-row-cal">+{Math.round(a.kcal)}</span>
-              <button className="icon-del-btn" onClick={() => patchDailyLog({ activities: activities.filter((x) => x.id !== a.id) })}>âœ•</button>
+              <button className="icon-del-btn" onClick={() => patchDailyLog({ activities: activities.filter((x) => x.id !== a.id) })}>x</button>
             </div>
           ))}
         </div>
@@ -370,7 +370,7 @@ function LockScreen({ mode, onUnlock, onSetup, owner }) {
     e.preventDefault();
     setError("");
     if (mode === "unlock") {
-      if (!/^\d{4,8}$/.test(pin)) return setError("Enter your 4â€“8 digit PIN.");
+      if (!/^\d{4,8}$/.test(pin)) return setError("Enter your 4-8 digit PIN.");
       setBusy(true);
       const ok = await onUnlock(pin);
       setBusy(false);
@@ -419,7 +419,7 @@ function LockScreen({ mode, onUnlock, onSetup, owner }) {
             <p className="lock-subtext">Enter your PIN to unlock.</p>
             <Field label="PIN" type="password" inputMode="numeric" autoComplete="current-password" maxLength="8" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} disabled={busy} />
             {error && <div className="form-error" role="alert">{error}</div>}
-            {busy && <div className="pin-hashing-status" role="status"><span className="pin-spinner" /><span>Verifyingâ€¦</span></div>}
+            {busy && <div className="pin-hashing-status" role="status"><span className="pin-spinner" /><span>Verifying...</span></div>}
             <button className="primary" type="submit" disabled={busy}>Unlock</button>
             <p className="lock-switch-hint">New device? <a href="#" onClick={(e) => { e.preventDefault(); localStorage.removeItem("caltrack.v2.security"); window.location.reload(); }}>Set up on this device</a></p>
           </>
@@ -577,7 +577,7 @@ function calcDailyTarget(p) {
   if (!bmr) return number(p.calorieTarget) || 2000;
   if (p.goalMode === "maintain") return tdee || bmr;
   // Base the eat target on BMR (resting burn), not TDEE.
-  // Any exercise burned on top is extra fat loss â€” not counted in the target.
+  // Any exercise burned on top is extra fat loss - not counted in the target.
   const deficit = number(p.deficitRate) || 500;
   const safeFloor = Math.max(1200, Math.round(bmr * 0.6));
   return Math.max(safeFloor, bmr - deficit);
@@ -706,11 +706,11 @@ function parseAiNutrition(text) {
   const first = text.split(/[.\n]/)[0].replace(/estimate only[.:]*\s*/i, "").trim();
   return {
     name:    first.length > 3 && first.length < 80 ? first : "AI food estimate",
-    calories: x(/calori(?:es)?[^0-9]{0,30}(\d+)(?:\s*[-â€“to]+\s*(\d+))?/),
-    protein:  x(/protein[^0-9]{0,20}(\d+)(?:\s*[-â€“to]+\s*(\d+))?/),
-    carbs:    x(/carb(?:ohydrate)?s?[^0-9]{0,20}(\d+)(?:\s*[-â€“to]+\s*(\d+))?/),
-    fat:      x(/(?:total )?fat[^0-9]{0,20}(\d+)(?:\s*[-â€“to]+\s*(\d+))?/),
-    fiber:    x(/fi(?:bre|ber)[^0-9]{0,20}(\d+)(?:\s*[-â€“to]+\s*(\d+))?/),
+    calories: x(/calori(?:es)?[^0-9]{0,30}(\d+)(?:\s*(?:-|to)\s*(\d+))?/),
+    protein:  x(/protein[^0-9]{0,20}(\d+)(?:\s*(?:-|to)\s*(\d+))?/),
+    carbs:    x(/carb(?:ohydrate)?s?[^0-9]{0,20}(\d+)(?:\s*(?:-|to)\s*(\d+))?/),
+    fat:      x(/(?:total )?fat[^0-9]{0,20}(\d+)(?:\s*(?:-|to)\s*(\d+))?/),
+    fiber:    x(/fi(?:bre|ber)[^0-9]{0,20}(\d+)(?:\s*(?:-|to)\s*(\d+))?/),
   };
 }
 
@@ -980,12 +980,12 @@ function AppV2Inner() {
 
   useEffect(() => {
     if (!supabaseConfig.configured) { setCloudHealth({ status: "missing-config", message: "Cloud backup not available in this build." }); return undefined; }
-    if (!online) { setCloudHealth({ status: "offline", message: "Offline â€” local data is still saved." }); return undefined; }
+    if (!online) { setCloudHealth({ status: "offline", message: "Offline - local data is still saved." }); return undefined; }
     let cancelled = false;
     async function check() {
       try {
         const result = await checkSupabaseConnection();
-        if (!cancelled) setCloudHealth({ status: result.authenticated ? "authenticated" : "reachable", message: result.message || (result.authenticated ? "Signed in â€” sync is active." : "Supabase reachable. Sign in to sync.") });
+        if (!cancelled) setCloudHealth({ status: result.authenticated ? "authenticated" : "reachable", message: result.message || (result.authenticated ? "Signed in - sync is active." : "Supabase reachable. Sign in to sync.") });
       } catch (err) {
         if (!cancelled) setCloudHealth({ status: "error", message: err.message || "Connection failed." });
       }
@@ -1029,9 +1029,9 @@ function AppV2Inner() {
   async function runCloudSync({ quiet = false } = {}) {
     if (!supabaseConfig.configured) return flash("Cloud backup not available.");
     if (!cloudSession?.user?.id)    return flash("Sign in before syncing.");
-    if (!online)                    return flash("Offline â€” changes saved locally.");
+    if (!online)                    return flash("Offline - changes saved locally.");
     setSyncing(true);
-    if (!quiet) setNotice("Syncingâ€¦");
+    if (!quiet) setNotice("Syncing...");
     try {
       const merged = await syncCalTrack(data, cloudSession);
       applyRemoteData(merged);
@@ -1052,7 +1052,7 @@ function AppV2Inner() {
   function dismissOnboarding() { localStorage.setItem("caltrack.v2.onboarding", "dismissed"); setOnboardingDismissed(true); }
 
   async function setupPin({ pin, email = "", onStatus = (_message) => {} }) {
-    onStatus("Saving PINâ€¦");
+    onStatus("Saving PIN...");
     const next = await hashPin(pin);
     const record = { ...next, owner: email };
     localStorage.setItem(SECURITY_KEY, JSON.stringify(record));
@@ -1060,7 +1060,7 @@ function AppV2Inner() {
     // Cloud session is created by the account login/signup step before local PIN setup.
     const existingSession = await getCurrentSession().catch(() => null);
     if (existingSession) {
-      onStatus("Syncing your dataâ€¦");
+      onStatus("Syncing your data...");
       try {
         setCloudSession(existingSession); cloudLoadedUser.current = existingSession.user.id; enableCloudSync();
         const merged = await syncCalTrack(loadData(), existingSession); applyRemoteData(merged);
@@ -1086,7 +1086,7 @@ function AppV2Inner() {
   }
 
   async function changePin() {
-    if (pinChange.next !== pinChange.confirm || !/^\d{4,8}$/.test(pinChange.next)) return flash("New PINs must match and be 4â€“8 digits.");
+    if (pinChange.next !== pinChange.confirm || !/^\d{4,8}$/.test(pinChange.next)) return flash("New PINs must match and be 4-8 digits.");
     if (security && !(await unlock(pinChange.current))) return flash("Current PIN is incorrect.");
     const next = await hashPin(pinChange.next);
     const record = { ...next, owner: security?.owner || data.profile.name || "" };
@@ -1201,7 +1201,7 @@ function AppV2Inner() {
   async function searchOpenFoodFacts() {
     if (!query.trim()) return flash("Enter a food name first.");
     setResults([]);
-    setBusy(true); setNotice("Searchingâ€¦");
+    setBusy(true); setNotice("Searching...");
     try {
       const q = query.trim();
       const saved  = searchSavedFoods(data.customFoods, q);
@@ -1237,7 +1237,7 @@ function AppV2Inner() {
   async function searchUsda() {
     if (!query.trim()) return flash("Enter a food name first.");
     setResults([]);
-    setBusy(true); setNotice("Searching USDAâ€¦");
+    setBusy(true); setNotice("Searching USDA...");
     try {
       const res = await fetch(API.usda, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: query.trim(), pageSize: 20 }) });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "USDA search failed.");
@@ -1253,7 +1253,7 @@ function AppV2Inner() {
     if (!file) return;
     if (!file.type.startsWith("image/")) return flash("Choose an image file.");
     setScanPreview(URL.createObjectURL(file));
-    setBusy(true); setNotice("Analysing photo with AIâ€¦");
+    setBusy(true); setNotice("Analysing photo with AI...");
     setPendingLogFood(null);
     try {
       const optimized = await optimizeImage(file);
@@ -1300,7 +1300,7 @@ function AppV2Inner() {
       setPendingLogFood({ name: parsed.name || mealDescription.trim().slice(0, 60), servingGrams: 100, calories: parsed.calories || "", protein: parsed.protein || "", carbs: parsed.carbs || "", fat: parsed.fat || "", fiber: parsed.fiber || "", confidence: "ai" });
       flash("Loaded from cache."); return;
     }
-    setBusy(true); setNotice("AI estimating your mealâ€¦");
+    setBusy(true); setNotice("AI estimating your meal...");
     try {
       const response = await fetch("/api/gemini", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -1394,7 +1394,7 @@ function AppV2Inner() {
         <div className="onboarding-banner">
           <div className="onboarding-header">
             <span className="eyebrow">Getting started</span>
-            <button className="dismiss-button" onClick={dismissOnboarding}>âœ• Dismiss</button>
+            <button className="dismiss-button" onClick={dismissOnboarding}>Dismiss</button>
           </div>
           <h2>Log your first meal to get started.</h2>
           <div className="onboarding-steps">
@@ -1742,10 +1742,10 @@ function AppV2Inner() {
                     <div className="calculation">
                       <div><span>TDEE</span><strong>{tdee} kcal</strong></div>
                       <div><span>Daily target</span><strong>{target} kcal</strong></div>
-                      {deficitPct > 0 && <div><span>Deficit</span><strong style={{ color: "var(--success)" }}>âˆ’{deficitPct}%</strong></div>}
+                      {deficitPct > 0 && <div><span>Deficit</span><strong style={{ color: "var(--success)" }}>-{deficitPct}%</strong></div>}
                     </div>
                   )}
-                  <p className="bodyfat-hint">Based on height {data.profile.height} cm Â· waist {data.profile.waist} cm Â· neck {data.profile.neck} cm{data.profile.hip ? ` Â· hip ${data.profile.hip} cm` : ""}. Update measurements in Me tab for a fresh reading.</p>
+                  <p className="bodyfat-hint">Based on height {data.profile.height} cm - waist {data.profile.waist} cm - neck {data.profile.neck} cm{data.profile.hip ? ` - hip ${data.profile.hip} cm` : ""}. Update measurements in Me tab for a fresh reading.</p>
                 </div>
               );
             })()}
@@ -1760,7 +1760,7 @@ function AppV2Inner() {
               <CalorieChart diary={data.diary} target={dailyTarget} />
               {streak > 0 && (
                 <div className="streak-pill" style={{ marginTop: 10 }}>
-                  <span className="streak-count">ðŸ”¥{streak}</span>
+                  <span className="streak-count">{streak}</span>
                   <div className="streak-label"><strong>{streak}-day logging streak</strong></div>
                 </div>
               )}
@@ -1790,7 +1790,7 @@ function AppV2Inner() {
                       <span className="entry-date">{m.date}</span>
                       {m.weight && <span className="entry-weight">{m.weight} kg</span>}
                       {m.waist  && <span className="entry-waist">{m.waist} cm waist</span>}
-                      <button className="entry-delete" onClick={() => deleteMeasurement(m.id)}>âœ•</button>
+                      <button className="entry-delete" onClick={() => deleteMeasurement(m.id)}>x</button>
                     </div>
                   ))}
                 </div>
@@ -1836,7 +1836,7 @@ function AppV2Inner() {
                 <label className="field">
                   <span>Sex</span>
                   <select value={data.profile.gender} onChange={(e) => setProfile({ gender: e.target.value })}>
-                    <option value="">â€”</option>
+                    <option value="">Select</option>
                     <option value="male">Male</option>
                     <option value="female">Female</option>
                   </select>
@@ -1853,9 +1853,9 @@ function AppV2Inner() {
                   <span>Activity level</span>
                   <select value={data.profile.activityLevel} onChange={(e) => setProfile({ activityLevel: e.target.value })}>
                     <option value="sedentary">Sedentary</option>
-                    <option value="light">Light (1â€“3Ã—/wk)</option>
-                    <option value="moderate">Moderate (3â€“5Ã—/wk)</option>
-                    <option value="active">Active (6â€“7Ã—/wk)</option>
+                    <option value="light">Light (1-3x/wk)</option>
+                    <option value="moderate">Moderate (3-5x/wk)</option>
+                    <option value="active">Active (6-7x/wk)</option>
                   </select>
                 </label>
                 <label className="field">
@@ -1874,7 +1874,7 @@ function AppV2Inner() {
                   if (profileSaveTimer.current) clearTimeout(profileSaveTimer.current);
                   setProfileSaved(true);
                   profileSaveTimer.current = setTimeout(() => setProfileSaved(false), 1800);
-                }}>{profileSaved ? "âœ“ Saved!" : "Save profile"}</button>
+                }}>{profileSaved ? "Saved!" : "Save profile"}</button>
               </div>
               </div>
             </details>
@@ -1901,7 +1901,7 @@ function AppV2Inner() {
                   <div className="calculation" style={{ marginBottom: 14 }}>
                     <div><span>TDEE (maintenance)</span><strong>{tdee} kcal</strong></div>
                     <div><span>Eating target</span><strong>{target} kcal</strong></div>
-                    {deficitPct > 0 && <div><span>Calorie deficit</span><strong style={{ color: "var(--success)" }}>âˆ’{deficitPct}%</strong></div>}
+                    {deficitPct > 0 && <div><span>Calorie deficit</span><strong style={{ color: "var(--success)" }}>-{deficitPct}%</strong></div>}
                     {bc && <>
                       <div><span>Body fat %</span><strong style={{ color: "#ff8c00" }}>{bc.bf}%</strong></div>
                       <div><span>Lean mass</span><strong>{bc.leanMass} kg</strong></div>
