@@ -2,10 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import logo1Src from "./assets/LOGO1.png";
 import logo2Src from "./assets/LOGO2.png";
 import {
-  Droplets, Droplet, Plus, CalendarDays, User, Activity, Scale,
+  Droplet, Plus, CalendarDays, User, Activity, Scale,
   Brain, Camera, Search, SlidersHorizontal, Stethoscope,
   ChevronRight, Flame, Footprints, Waves, Bike, Dumbbell,
-  Wind, Zap, Wheat, Leaf, Beef, Timer,
+  Wind, Zap, Timer,
 } from "lucide-react";
 import {
   cacheFoodResult,
@@ -29,61 +29,61 @@ const STORAGE_KEY  = "caltrack.v2";
 const SECURITY_KEY = "caltrack.v2.security";
 const MEALS = ["Breakfast", "Lunch", "Dinner", "Snack"];
 const EMPTY_NUTRITION = { calories: "", protein: "", carbs: "", fat: "", fiber: "" };
-const MEAL_ICONS = { Breakfast: "🌅", Lunch: "☀️", Dinner: "🌙", Snack: "🍎" };
+const MEAL_ICONS = { Breakfast: "", Lunch: "", Dinner: "", Snack: "" };
 const API = { openFoodFacts: "/api/open-food-facts", usda: "/api/usda" };
+const TODAY_ACTIVITY_ACTIONS = {
+  walk:     { label: "Walk",     name: "Walk",              met: 3.5, defaultMinutes: 20 },
+  swim:     { label: "Swim",     name: "Swim",              met: 6.0, defaultMinutes: 20 },
+  strength: { label: "Strength", name: "Strength training", met: 4.0, defaultMinutes: 45 },
+};
 
-/* ───────────────────────── ErrorBoundary ───────────────────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ ErrorBoundary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { error: null }; }
   static getDerivedStateFromError(error) { return { error }; }
   render() {
     if (this.state.error) return (
-      <div style={{ padding: "2rem", textAlign: "center", fontFamily: "sans-serif" }}>
-        <h2 style={{ marginBottom: "1rem" }}>Something went wrong</h2>
-        <p style={{ color: "#888", marginBottom: "1.5rem", fontSize: "0.9rem" }}>{String(this.state.error)}</p>
-        <button onClick={() => window.location.reload()} style={{ padding: "0.75rem 1.5rem", background: "#FF4500", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer" }}>
-          Reload
-        </button>
+      <div className="error-shell">
+        <div className="error-card">
+          <img src={logo2Src} alt="PULSE" className="lock-logo" />
+          <h2>Something needs a quick refresh</h2>
+          <p>PULSE saved your data locally. Reload the app and you should be back in your day.</p>
+          <button className="primary" onClick={() => window.location.reload()}>Reload PULSE</button>
+        </div>
       </div>
     );
     return this.props.children;
   }
 }
 
-/* ───────────────────────── CalorieRing ───────────────────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ CalorieRing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function CalorieRing({ consumed, burned = 0, target, percent, size = 100 }) {
-  const outerR = 40, innerR = 29, cx = 50, cy = 50;
-  const outerC = 2 * Math.PI * outerR;
-  const innerC = 2 * Math.PI * innerR;
-  const cFrac  = Math.min(1, consumed / Math.max(1, target));
-  const bFrac  = Math.min(1, burned  / Math.max(1, target));
-  const isOver = cFrac >= 1;
+  const ringConsumedFrac = Math.min(1, consumed / Math.max(1, target));
+  const ringBurnedFrac = Math.min(1, burned / Math.max(1, target));
+  const eatenDeg = Math.round(ringConsumedFrac * 360);
+  const burnStart = Math.min(342, eatenDeg + 52);
+  const burnEnd = Math.min(356, burnStart + Math.max(0, Math.round(ringBurnedFrac * 360)));
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100" className="calorie-ring-svg" aria-hidden="true">
-      {/* tracks */}
-      <circle cx={cx} cy={cy} r={outerR} fill="none" stroke="rgba(255,255,255,.07)" strokeWidth="9" />
-      <circle cx={cx} cy={cy} r={innerR} fill="none" stroke="rgba(255,255,255,.07)" strokeWidth="7" />
-      {/* consumed — outer, orange→red */}
-      <circle cx={cx} cy={cy} r={outerR} fill="none"
-        stroke={isOver ? "#ff5050" : "#ff4500"}
-        strokeWidth="9" strokeLinecap="round"
-        strokeDasharray={`${cFrac * outerC} ${outerC}`}
-        transform="rotate(-90 50 50)" />
-      {/* burned — inner, green */}
-      {burned > 0 && (
-        <circle cx={cx} cy={cy} r={innerR} fill="none"
-          stroke="#00d278"
-          strokeWidth="7" strokeLinecap="round"
-          strokeDasharray={`${bFrac * innerC} ${innerC}`}
-          transform="rotate(-90 50 50)" />
-      )}
-      <text x="50" y="45" textAnchor="middle" fill="white" fontSize="15" fontWeight="800" fontFamily="'Inter',sans-serif">{Math.round(percent)}%</text>
-      <text x="50" y="55" textAnchor="middle" fill="rgba(255,255,255,.4)" fontSize="6.5" letterSpacing="1" fontFamily="'Inter',sans-serif">EATEN</text>
-    </svg>
+    <div
+      className="calorie-ring-css"
+      aria-hidden="true"
+      style={{
+        width: size,
+        height: size,
+        "--eaten-deg": `${eatenDeg}deg`,
+        "--burn-start": `${burnStart}deg`,
+        "--burn-end": `${burnEnd}deg`,
+      }}
+    >
+      <div>
+        <strong>{Math.round(percent)}%</strong>
+        <span>Eaten</span>
+      </div>
+    </div>
   );
 }
 
-/* ───────────────────────── CalorieChart ───────────────────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ CalorieChart â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function CalorieChart({ diary, target }) {
   const days   = Array.from({ length: 7 }, (_, i) => dateOffset(i - 6));
   const values = days.map((d) => totalsFor(diary[d]).calories);
@@ -106,7 +106,7 @@ function CalorieChart({ diary, target }) {
   );
 }
 
-/* ───────────────────────── WeightJourneyCard ───────────────────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ WeightJourneyCard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function WeightJourneyCard({ entries, highestWeight, currentWeight, goalWeight: goalW, setData, flash }) {
   const [quickInput, setQuickInput] = useState("");
   const today = localDate();
@@ -155,7 +155,7 @@ function WeightJourneyCard({ entries, highestWeight, currentWeight, goalWeight: 
           <input type="date" className="ws-date-input" id="wj-log-date" defaultValue={today} max={today} />
           <button className="primary ws-save-btn" onClick={() => {
             const w = parseFloat(quickInput);
-            if (!w || w < 20 || w > 300) { flash("Enter a valid weight (20–300 kg)."); return; }
+            if (!w || w < 20 || w > 300) { flash("Enter a valid weight (20â€“300 kg)."); return; }
             const dateEl = /** @type {HTMLInputElement | null} */ (document.getElementById("wj-log-date"));
             const logDate = (dateEl && dateEl.value) ? dateEl.value : today;
             setData((d) => ({
@@ -166,59 +166,35 @@ function WeightJourneyCard({ entries, highestWeight, currentWeight, goalWeight: 
             setQuickInput("");
             flash(logDate === today ? "Weight logged!" : `Weight logged for ${logDate}.`);
           }}>Save</button>
-          <button className="secondary ws-cancel-btn" onClick={() => setQuickInput("")}>✕</button>
+          <button className="secondary ws-cancel-btn" onClick={() => setQuickInput("")}>âœ•</button>
         </div>
       )}
 
       {needsWeigh && quickInput === "" && (
         <button className="weigh-reminder" onClick={() => setQuickInput(" ")}>
-          ⚖️ {daysSince === null ? "Log your first weight" : `${daysSince} days since last weigh-in`}
+          {daysSince === null ? "Log your first weight" : `${daysSince} days since last weigh-in`}
         </button>
       )}
 
       <div className="wj-stats">
-        {firstW  && <div className="wj-stat"><span>Started</span><strong>{firstW} kg</strong></div>}
-        {dropped !== null && dropped > 0 && <div className="wj-stat wj-lost"><span>Lost</span><strong>−{dropped} kg</strong></div>}
-        {curW    && <div className="wj-stat wj-cur"><span>Now</span><strong>{curW} kg</strong></div>}
-        {goalW   && <div className="wj-stat wj-goal"><span>Goal</span><strong>{goalW} kg</strong></div>}
-        {toGo !== null && toGo > 0 && <div className="wj-stat"><span>To go</span><strong>{toGo} kg</strong></div>}
+        {firstW  && <div className="wj-stat"><span>Start</span><strong>{formatKg(firstW)} kg</strong></div>}
+        {curW    && <div className="wj-stat wj-cur"><span>Now</span><strong>{formatKg(curW)} kg</strong></div>}
+        {dropped !== null && dropped > 0 && <div className="wj-stat wj-lost"><span>Down</span><strong>{formatKg(dropped)} kg</strong></div>}
+        {goalW   && <div className="wj-stat wj-goal"><span>Goal</span><strong>{formatKg(goalW)} kg</strong></div>}
+        {toGo !== null && toGo > 0 && <div className="wj-stat"><span>Left</span><strong>{formatKg(toGo)} kg</strong></div>}
       </div>
 
       {pct !== null && curX !== null && (
-        <div className="wj-track-wrap">
-          <svg viewBox={`0 0 ${TW} 62`} className="wj-track-svg">
-            <defs>
-              <linearGradient id="wjGrad" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="#4dc37f" stopOpacity=".9"/>
-                <stop offset="100%" stopColor="#00c6ff" stopOpacity=".9"/>
-              </linearGradient>
-              <filter id="glow">
-                <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
-                <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
-              </filter>
-            </defs>
-            <line x1={PAD} y1="22" x2={TW-PAD} y2="22" stroke="rgba(255,255,255,.1)" strokeWidth="5" strokeLinecap="round"/>
-            <line x1={PAD} y1="22" x2={curX}    y2="22" stroke="url(#wjGrad)"         strokeWidth="5" strokeLinecap="round"/>
-            {[25, 50, 75].map((ms) => {
-              const mx = PAD + (ms / 100) * (TW - 2 * PAD);
-              const reached = pct >= ms;
-              return (
-                <g key={ms}>
-                  <circle cx={mx} cy="22" r="4" fill={reached ? "#ffd700" : "rgba(255,255,255,.08)"} stroke={reached ? "#ffd700" : "rgba(255,255,255,.2)"} strokeWidth="1.5" filter={reached ? "url(#glow)" : undefined}/>
-                  <text x={mx} y="36" fontSize="7" fill={reached ? "#ffd700" : "rgba(255,255,255,.2)"} textAnchor="middle">{ms}%</text>
-                </g>
-              );
-            })}
-            <circle cx={PAD} cy="22" r="6" fill="#4dc37f" filter="url(#glow)"/>
-            <circle cx={curX} cy="22" r="9" fill="#0a090d" stroke="#00c6ff" strokeWidth="2.5" filter="url(#glow)"/>
-            <circle cx={curX} cy="22" r="4" fill="#00c6ff"/>
-            <circle cx={TW-PAD} cy="22" r="7" fill={pct >= 100 ? "#ffd700" : "rgba(255,215,0,.08)"} stroke="#ffd700" strokeWidth="2" filter="url(#glow)"/>
-            <text x={TW-PAD} y="22" fontSize="9" fill="#ffd700" textAnchor="middle" dominantBaseline="central">🏆</text>
-            <text x={PAD}    y="42" fontSize="10" fill="#4dc37f" fontWeight="700">{firstW} kg</text>
-            <text x={curX}   y="42" fontSize="10" fill="#00c6ff" fontWeight="700" textAnchor="middle">{curW} kg</text>
-            <text x={TW-PAD} y="42" fontSize="10" fill="#ffd700" fontWeight="700" textAnchor="end">{goalW} kg</text>
-          </svg>
-          <div className="wj-pct">{Math.round(pct)}% of the way to your goal</div>
+        <div className="wj-ritual-meter">
+          <div className="wj-meter-labels">
+            <span>Start {formatKg(firstW)} kg</span>
+            <strong>{Math.round(pct)}%</strong>
+            <span>Goal {formatKg(goalW)} kg</span>
+          </div>
+          <div className="wj-meter-track" aria-hidden="true">
+            <span style={{ width: `${Math.round(pct)}%` }}><i /></span>
+          </div>
+          <p>{formatKg(dropped)} kg down. {toGo > 0 ? `${formatKg(toGo)} kg left.` : "Goal reached."}</p>
         </div>
       )}
 
@@ -234,13 +210,13 @@ function WeightJourneyCard({ entries, highestWeight, currentWeight, goalWeight: 
             {startY !== null && (
               <>
                 <line x1={CPX} y1={startY} x2={CW-CPX} y2={startY} stroke="#ff7043" strokeWidth="1.2" strokeDasharray="5 4" strokeOpacity=".6"/>
-                <text x={CPX+2} y={startY+9} fontSize="8" fill="#ff7043" opacity=".8">Start {firstW} kg</text>
+                <text x={CPX+2} y={startY+9} fontSize="8" fill="#ff7043" opacity=".8">Start {formatKg(firstW)} kg</text>
               </>
             )}
             {goalY !== null && (
               <>
                 <line x1={CPX} y1={goalY} x2={CW-CPX} y2={goalY} stroke="#4dc37f" strokeWidth="1.2" strokeDasharray="5 4" strokeOpacity=".6"/>
-                <text x={CW-CPX-2} y={goalY-3} fontSize="8" fill="#4dc37f" opacity=".8" textAnchor="end">Goal {goalW} kg</text>
+                <text x={CW-CPX-2} y={goalY-3} fontSize="8" fill="#4dc37f" opacity=".8" textAnchor="end">Goal {formatKg(goalW)} kg</text>
               </>
             )}
             <polygon points={areaPts} fill="url(#wjAreaGrad)"/>
@@ -258,8 +234,12 @@ function WeightJourneyCard({ entries, highestWeight, currentWeight, goalWeight: 
                   ) : (
                     <circle cx={cx2} cy={cy2} r="3" fill="#0a090d" stroke={isFirst ? "#4dc37f" : "rgba(0,198,255,.5)"} strokeWidth="1.5"/>
                   )}
-                  <text x={cx2} y={cy2 - 6} fontSize="8" fill={isLast ? "#00c6ff" : "rgba(255,255,255,.45)"} fontWeight={isLast ? "700" : "400"} textAnchor="middle">{number(e.weight)}</text>
-                  <text x={cx2} y={cy2 + 14} fontSize="7" fill="rgba(255,255,255,.3)" textAnchor="middle">{e.date ? e.date.slice(5).replace("-", "/") : ""}</text>
+                  {(isFirst || isLast) && (
+                    <>
+                      <text x={cx2} y={cy2 - 6} fontSize="8" fill={isLast ? "#00c6ff" : "rgba(255,255,255,.45)"} fontWeight={isLast ? "700" : "400"} textAnchor="middle">{formatKg(e.weight)}</text>
+                      <text x={cx2} y={cy2 + 14} fontSize="7" fill="rgba(255,255,255,.3)" textAnchor="middle">{e.date ? e.date.slice(5).replace("-", "/") : ""}</text>
+                    </>
+                  )}
                 </g>
               );
             })}
@@ -278,7 +258,7 @@ function WeightJourneyCard({ entries, highestWeight, currentWeight, goalWeight: 
   );
 }
 
-/* ───────────────────────── ActivityCard ───────────────────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ ActivityCard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 const ACTIVITY_PRESETS = [
   { name: "Walk",    Icon: Footprints,    met: 3.5  },
   { name: "Run",     Icon: Zap,           met: 8.0  },
@@ -290,7 +270,7 @@ const ACTIVITY_PRESETS = [
   { name: "Other",   Icon: Timer,         met: null },
 ];
 
-function ActivityCard({ dailyLog, patchDailyLog, weightKg }) {
+function _ActivityCard({ dailyLog, patchDailyLog, weightKg }) {
   const [selected, setSelected]     = useState(null);
   const [duration, setDuration]     = useState("");
   const [customName, setCustomName] = useState("");
@@ -318,8 +298,8 @@ function ActivityCard({ dailyLog, patchDailyLog, weightKg }) {
   return (
     <div className="activity-card">
       <div className="activity-card-top">
-        <span className="section-label">Activity</span>
-        {totalBurned > 0 && <span className="activity-burned-badge">−{Math.round(totalBurned)} kcal</span>}
+        <span className="section-label">Activity support</span>
+        {totalBurned > 0 && <span className="activity-burned-badge">+{Math.round(totalBurned)} deficit</span>}
       </div>
 
       {activities.length > 0 && (
@@ -327,8 +307,8 @@ function ActivityCard({ dailyLog, patchDailyLog, weightKg }) {
           {activities.map((a) => (
             <div key={a.id} className="activity-row">
               <span>{a.name}</span>
-              <span className="activity-row-cal">−{Math.round(a.kcal)}</span>
-              <button className="icon-del-btn" onClick={() => patchDailyLog({ activities: activities.filter((x) => x.id !== a.id) })}>✕</button>
+              <span className="activity-row-cal">+{Math.round(a.kcal)}</span>
+              <button className="icon-del-btn" onClick={() => patchDailyLog({ activities: activities.filter((x) => x.id !== a.id) })}>âœ•</button>
             </div>
           ))}
         </div>
@@ -359,8 +339,8 @@ function ActivityCard({ dailyLog, patchDailyLog, weightKg }) {
                 onKeyDown={(e) => e.key === "Enter" && logActivity()}
                 autoFocus
               />
-              {previewKcal !== null && <span className="activity-kcal-live">≈ {previewKcal} kcal</span>}
-              <button className="primary" onClick={logActivity} disabled={!mins}>Log</button>
+              {previewKcal !== null && <span className="activity-kcal-live">+{previewKcal} deficit</span>}
+              <button className="primary" onClick={logActivity} disabled={!mins}>Add</button>
             </div>
           ) : (
             <div className="activity-min-row">
@@ -375,7 +355,7 @@ function ActivityCard({ dailyLog, patchDailyLog, weightKg }) {
   );
 }
 
-/* ───────────────────────── LockScreen ───────────────────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ LockScreen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function LockScreen({ mode, onUnlock, onSetup, owner }) {
   const [email, setEmail]   = useState("");
   const [pin, setPin]       = useState("");
@@ -390,7 +370,7 @@ function LockScreen({ mode, onUnlock, onSetup, owner }) {
     e.preventDefault();
     setError("");
     if (mode === "unlock") {
-      if (!/^\d{4,8}$/.test(pin)) return setError("Enter your 4–8 digit PIN.");
+      if (!/^\d{4,8}$/.test(pin)) return setError("Enter your 4â€“8 digit PIN.");
       setBusy(true);
       const ok = await onUnlock(pin);
       setBusy(false);
@@ -439,7 +419,7 @@ function LockScreen({ mode, onUnlock, onSetup, owner }) {
             <p className="lock-subtext">Enter your PIN to unlock.</p>
             <Field label="PIN" type="password" inputMode="numeric" autoComplete="current-password" maxLength="8" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} disabled={busy} />
             {error && <div className="form-error" role="alert">{error}</div>}
-            {busy && <div className="pin-hashing-status" role="status"><span className="pin-spinner" /><span>Verifying…</span></div>}
+            {busy && <div className="pin-hashing-status" role="status"><span className="pin-spinner" /><span>Verifyingâ€¦</span></div>}
             <button className="primary" type="submit" disabled={busy}>Unlock</button>
             <p className="lock-switch-hint">New device? <a href="#" onClick={(e) => { e.preventDefault(); localStorage.removeItem("caltrack.v2.security"); window.location.reload(); }}>Set up on this device</a></p>
           </>
@@ -480,7 +460,7 @@ function LockScreen({ mode, onUnlock, onSetup, owner }) {
   );
 }
 
-/* ───────────────────────── Field ───────────────────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Field â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function Field({ label, suffix = "", ...props }) {
   return (
     <label className="field">
@@ -493,9 +473,14 @@ function Field({ label, suffix = "", ...props }) {
   );
 }
 
-/* ───────────────────────── Utility functions ───────────────────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Utility functions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 const number    = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const round     = (v) => Math.round((number(v) + Number.EPSILON) * 10) / 10;
+const formatKg  = (v) => {
+  const n = number(v);
+  if (!n) return "0";
+  return Number.isInteger(n) ? String(n) : n.toFixed(1).replace(/\.0$/, "");
+};
 const makeId    = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const localDate = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 const dateOffset = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
@@ -592,7 +577,7 @@ function calcDailyTarget(p) {
   if (!bmr) return number(p.calorieTarget) || 2000;
   if (p.goalMode === "maintain") return tdee || bmr;
   // Base the eat target on BMR (resting burn), not TDEE.
-  // Any exercise burned on top is extra fat loss — not counted in the target.
+  // Any exercise burned on top is extra fat loss â€” not counted in the target.
   const deficit = number(p.deficitRate) || 500;
   const safeFloor = Math.max(1200, Math.round(bmr * 0.6));
   return Math.max(safeFloor, bmr - deficit);
@@ -721,11 +706,11 @@ function parseAiNutrition(text) {
   const first = text.split(/[.\n]/)[0].replace(/estimate only[.:]*\s*/i, "").trim();
   return {
     name:    first.length > 3 && first.length < 80 ? first : "AI food estimate",
-    calories: x(/calori(?:es)?[^0-9]{0,30}(\d+)(?:\s*[-–to]+\s*(\d+))?/),
-    protein:  x(/protein[^0-9]{0,20}(\d+)(?:\s*[-–to]+\s*(\d+))?/),
-    carbs:    x(/carb(?:ohydrate)?s?[^0-9]{0,20}(\d+)(?:\s*[-–to]+\s*(\d+))?/),
-    fat:      x(/(?:total )?fat[^0-9]{0,20}(\d+)(?:\s*[-–to]+\s*(\d+))?/),
-    fiber:    x(/fi(?:bre|ber)[^0-9]{0,20}(\d+)(?:\s*[-–to]+\s*(\d+))?/),
+    calories: x(/calori(?:es)?[^0-9]{0,30}(\d+)(?:\s*[-â€“to]+\s*(\d+))?/),
+    protein:  x(/protein[^0-9]{0,20}(\d+)(?:\s*[-â€“to]+\s*(\d+))?/),
+    carbs:    x(/carb(?:ohydrate)?s?[^0-9]{0,20}(\d+)(?:\s*[-â€“to]+\s*(\d+))?/),
+    fat:      x(/(?:total )?fat[^0-9]{0,20}(\d+)(?:\s*[-â€“to]+\s*(\d+))?/),
+    fiber:    x(/fi(?:bre|ber)[^0-9]{0,20}(\d+)(?:\s*[-â€“to]+\s*(\d+))?/),
   };
 }
 
@@ -776,9 +761,9 @@ function mergeAccountData(localData, remoteData) {
   };
 }
 
-/* ═══════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    MAIN APP COMPONENT
-═══════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 function AppV2Inner() {
   const [security,   setSecurity]   = useState(readSecurity);
   const [locked,     setLocked]     = useState(true);
@@ -793,6 +778,7 @@ function AppV2Inner() {
   const [logForm,      setLogForm]      = useState({ grams: 100, meal: "Breakfast" });
   const [custom,       setCustom]       = useState({ name: "", brand: "", servingGrams: 100, confidence: "manual", ...EMPTY_NUTRITION });
   const [showManual,   setShowManual]   = useState(false);
+  const [activityDraft, setActivityDraft] = useState(null);
 
   // AI
   const [mealDescription, setMealDescription] = useState("");
@@ -838,7 +824,7 @@ function AppV2Inner() {
   const pendingSync = useRef(false);
   const autoSyncTimer = useRef(null);
 
-  /* ─── Derived state ─── */
+  /* â”€â”€â”€ Derived state â”€â”€â”€ */
   const items       = data.diary[date] || [];
   const totals      = useMemo(() => totalsFor(items), [items]);
   const dailyLog    = { water: 0, notes: "", activities: [], medsTaken: [], healthFlags: {}, ...(data.dailyLogs[date] || {}) };
@@ -877,7 +863,7 @@ function AppV2Inner() {
     ? (localQueryResults.length ? localQueryResults : simplifyFoods(searchSavedFoods(results, query)).slice(0, 12))
     : quickFoods;
 
-  /* ─── Animated calorie counter ─── */
+  /* â”€â”€â”€ Animated calorie counter â”€â”€â”€ */
   useEffect(() => {
     const eaten = totals.calories;
     const target = Math.abs(Math.round(dailyTarget - eaten));
@@ -897,7 +883,7 @@ function AppV2Inner() {
     return () => { if (calAnimRef.current) cancelAnimationFrame(calAnimRef.current); };
   }, [totals.calories, dailyTarget]);
 
-  /* ─── Persist to localStorage ─── */
+  /* â”€â”€â”€ Persist to localStorage â”€â”€â”€ */
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -906,7 +892,7 @@ function AppV2Inner() {
     } catch { setNotice("Local storage is full. Export a backup."); }
   }, [data]);
 
-  /* ─── Cloud sync helpers ─── */
+  /* â”€â”€â”€ Cloud sync helpers â”€â”€â”€ */
   async function pushAndPullLatest(session = cloudSession) {
     if (!session?.user?.id || locked || !supabaseConfig.configured || !online) return null;
     if (syncInFlight.current) { pendingSync.current = true; return null; }
@@ -994,12 +980,12 @@ function AppV2Inner() {
 
   useEffect(() => {
     if (!supabaseConfig.configured) { setCloudHealth({ status: "missing-config", message: "Cloud backup not available in this build." }); return undefined; }
-    if (!online) { setCloudHealth({ status: "offline", message: "Offline — local data is still saved." }); return undefined; }
+    if (!online) { setCloudHealth({ status: "offline", message: "Offline â€” local data is still saved." }); return undefined; }
     let cancelled = false;
     async function check() {
       try {
         const result = await checkSupabaseConnection();
-        if (!cancelled) setCloudHealth({ status: result.authenticated ? "authenticated" : "reachable", message: result.message || (result.authenticated ? "Signed in — sync is active." : "Supabase reachable. Sign in to sync.") });
+        if (!cancelled) setCloudHealth({ status: result.authenticated ? "authenticated" : "reachable", message: result.message || (result.authenticated ? "Signed in â€” sync is active." : "Supabase reachable. Sign in to sync.") });
       } catch (err) {
         if (!cancelled) setCloudHealth({ status: "error", message: err.message || "Connection failed." });
       }
@@ -1025,7 +1011,7 @@ function AppV2Inner() {
     return () => { window.clearTimeout(timer); ["pointerdown", "keydown", "touchstart"].forEach((ev) => window.removeEventListener(ev, reset)); };
   }, [locked, security, data.profile.sessionTimeout]);
 
-  /* ─── Helpers ─── */
+  /* â”€â”€â”€ Helpers â”€â”€â”€ */
   function flash(message) { setNotice(message); window.setTimeout(() => setNotice(""), 4500); }
 
   function setProfile(patch) { setData((d) => ({ ...d, profile: { ...d.profile, ...patch } })); }
@@ -1043,9 +1029,9 @@ function AppV2Inner() {
   async function runCloudSync({ quiet = false } = {}) {
     if (!supabaseConfig.configured) return flash("Cloud backup not available.");
     if (!cloudSession?.user?.id)    return flash("Sign in before syncing.");
-    if (!online)                    return flash("Offline — changes saved locally.");
+    if (!online)                    return flash("Offline â€” changes saved locally.");
     setSyncing(true);
-    if (!quiet) setNotice("Syncing…");
+    if (!quiet) setNotice("Syncingâ€¦");
     try {
       const merged = await syncCalTrack(data, cloudSession);
       applyRemoteData(merged);
@@ -1066,7 +1052,7 @@ function AppV2Inner() {
   function dismissOnboarding() { localStorage.setItem("caltrack.v2.onboarding", "dismissed"); setOnboardingDismissed(true); }
 
   async function setupPin({ pin, email = "", onStatus = (_message) => {} }) {
-    onStatus("Saving PIN…");
+    onStatus("Saving PINâ€¦");
     const next = await hashPin(pin);
     const record = { ...next, owner: email };
     localStorage.setItem(SECURITY_KEY, JSON.stringify(record));
@@ -1074,7 +1060,7 @@ function AppV2Inner() {
     // Cloud session is created by the account login/signup step before local PIN setup.
     const existingSession = await getCurrentSession().catch(() => null);
     if (existingSession) {
-      onStatus("Syncing your data…");
+      onStatus("Syncing your dataâ€¦");
       try {
         setCloudSession(existingSession); cloudLoadedUser.current = existingSession.user.id; enableCloudSync();
         const merged = await syncCalTrack(loadData(), existingSession); applyRemoteData(merged);
@@ -1100,7 +1086,7 @@ function AppV2Inner() {
   }
 
   async function changePin() {
-    if (pinChange.next !== pinChange.confirm || !/^\d{4,8}$/.test(pinChange.next)) return flash("New PINs must match and be 4–8 digits.");
+    if (pinChange.next !== pinChange.confirm || !/^\d{4,8}$/.test(pinChange.next)) return flash("New PINs must match and be 4â€“8 digits.");
     if (security && !(await unlock(pinChange.current))) return flash("Current PIN is incorrect.");
     const next = await hashPin(pinChange.next);
     const record = { ...next, owner: security?.owner || data.profile.name || "" };
@@ -1116,6 +1102,33 @@ function AppV2Inner() {
 
   function addWater(ml) { updateDailyLog({ water: Math.max(0, number(dailyLog.water) + ml) }); flash(`+${Math.round(ml)} ml water.`); }
   function patchDailyLog(patch) { updateDailyLog(patch); }
+
+  function openActivityInput(activity) {
+    setActivityDraft({ ...activity, minutes: activity.defaultMinutes });
+  }
+
+  function activityCalories(activity = activityDraft) {
+    if (!activity) return 0;
+    const minutes = number(activity.minutes);
+    if (minutes <= 0) return 0;
+    const weight = number(data.profile.weight) || 70;
+    return Math.round(activity.met * weight * (minutes / 60));
+  }
+
+  function saveActivityDraft() {
+    if (!activityDraft) return;
+    const minutes = Math.round(number(activityDraft.minutes));
+    if (minutes <= 0 || minutes > 600) return flash("Enter a duration between 1 and 600 minutes.");
+    const kcal = activityCalories({ ...activityDraft, minutes });
+    patchDailyLog({
+      activities: [
+        ...(dailyLog.activities || []),
+        { id: makeId(), name: `${activityDraft.name} ${minutes} min`, minutes, kcal },
+      ],
+    });
+    setActivityDraft(null);
+    flash(`${activityDraft.label} logged.`);
+  }
 
   function openLogFood(food) {
     setSelectedFood(food);
@@ -1158,7 +1171,7 @@ function AppV2Inner() {
     setSelectedFood(null);
   }
 
-  function removeFood(id) {
+  function _removeFood(id) {
     setData((d) => ({ ...d, diary: { ...d.diary, [date]: (d.diary[date] || []).filter((e) => e.id !== id) } }));
   }
 
@@ -1188,7 +1201,7 @@ function AppV2Inner() {
   async function searchOpenFoodFacts() {
     if (!query.trim()) return flash("Enter a food name first.");
     setResults([]);
-    setBusy(true); setNotice("Searching…");
+    setBusy(true); setNotice("Searchingâ€¦");
     try {
       const q = query.trim();
       const saved  = searchSavedFoods(data.customFoods, q);
@@ -1224,7 +1237,7 @@ function AppV2Inner() {
   async function searchUsda() {
     if (!query.trim()) return flash("Enter a food name first.");
     setResults([]);
-    setBusy(true); setNotice("Searching USDA…");
+    setBusy(true); setNotice("Searching USDAâ€¦");
     try {
       const res = await fetch(API.usda, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: query.trim(), pageSize: 20 }) });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "USDA search failed.");
@@ -1240,7 +1253,7 @@ function AppV2Inner() {
     if (!file) return;
     if (!file.type.startsWith("image/")) return flash("Choose an image file.");
     setScanPreview(URL.createObjectURL(file));
-    setBusy(true); setNotice("Analysing photo with AI…");
+    setBusy(true); setNotice("Analysing photo with AIâ€¦");
     setPendingLogFood(null);
     try {
       const optimized = await optimizeImage(file);
@@ -1287,7 +1300,7 @@ function AppV2Inner() {
       setPendingLogFood({ name: parsed.name || mealDescription.trim().slice(0, 60), servingGrams: 100, calories: parsed.calories || "", protein: parsed.protein || "", carbs: parsed.carbs || "", fat: parsed.fat || "", fiber: parsed.fiber || "", confidence: "ai" });
       flash("Loaded from cache."); return;
     }
-    setBusy(true); setNotice("AI estimating your meal…");
+    setBusy(true); setNotice("AI estimating your mealâ€¦");
     try {
       const response = await fetch("/api/gemini", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -1360,26 +1373,28 @@ function AppV2Inner() {
     flash("Targets calculated from your profile.");
   }
 
-  /* ─── Lock check ─── */
+  /* â”€â”€â”€ Lock check â”€â”€â”€ */
   if (locked) return <LockScreen mode={security ? "unlock" : "setup"} onUnlock={unlock} onSetup={setupPin} owner={security?.owner} />;
 
-  /* ─── Main render ─── */
+  /* â”€â”€â”€ Main render â”€â”€â”€ */
   const isNewUser = !onboardingDismissed && !Object.values(data.diary).some((e) => e.length) && !data.measurements.length;
 
   return (
     <div className="app-shell">
       {/* Topbar */}
-      <header className="topbar">
-        <img src={logo2Src} alt="PULSE" className="brand-logo app-logo" />
-        <span style={{ fontSize: 12, color: "var(--text3)" }}>{new Date().toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}</span>
-      </header>
+      {tab === "diary" && (
+        <header className="topbar">
+          <img src={logo2Src} alt="PULSE" className="brand-logo app-logo" />
+          <span className="topbar-greeting">Hi {data.profile.name || cloudSession?.user?.email?.split("@")[0] || "there"}</span>
+        </header>
+      )}
 
       {/* Onboarding */}
       {tab === "diary" && isNewUser && (
         <div className="onboarding-banner">
           <div className="onboarding-header">
             <span className="eyebrow">Getting started</span>
-            <button className="dismiss-button" onClick={dismissOnboarding}>✕ Dismiss</button>
+            <button className="dismiss-button" onClick={dismissOnboarding}>âœ• Dismiss</button>
           </div>
           <h2>Log your first meal to get started.</h2>
           <div className="onboarding-steps">
@@ -1396,183 +1411,127 @@ function AppV2Inner() {
 
       <main ref={mainRef}>
 
-        {/* ═══ TODAY ═══ */}
+        {/* â•â•â• TODAY â•â•â• */}
         {tab === "diary" && (() => {
           const burnedToday   = (dailyLog.activities || []).reduce((s, a) => s + number(a.kcal), 0);
-          const netConsumed   = Math.max(0, totals.calories - burnedToday);
-          const netRemaining  = dailyTarget - netConsumed;
-          const weightEntries2= [...data.measurements].filter((m) => number(m.weight) > 0).sort((a,b) => a.date.localeCompare(b.date));
-          const startW        = number(data.profile.highestWeight) || (weightEntries2[0] ? number(weightEntries2[0].weight) : 0);
-          const curW          = weightEntries2.length ? number(weightEntries2[weightEntries2.length-1].weight) : number(data.profile.weight);
-          const goalW         = number(data.profile.goalWeight);
-          const lost          = startW && curW ? round(startW - curW) : 0;
-          const toGo          = curW && goalW ? round(curW - goalW) : 0;
-          const journeyPct    = startW && goalW && startW > goalW ? Math.min(100, Math.max(0, (lost / (startW - goalW)) * 100)) : 0;
+          const eatenToday    = Math.round(totals.calories);
+          const foodRemaining = dailyTarget - totals.calories;
+          const isOverTarget  = foodRemaining < 0;
+          const waterTarget   = number(data.profile.waterTarget) || 2500;
+          const waterProgress = Math.min(100, (number(dailyLog.water) / Math.max(1, waterTarget)) * 100);
+          const proteinTarget = number(data.profile.proteinTarget) || 130;
+          const proteinGap    = Math.max(0, Math.round(proteinTarget - totals.protein));
 
-          const motivational = (() => {
-            if (!curW) return "Set your weight in Me tab to track progress.";
-            if (journeyPct >= 100) return "🎉 Goal reached! You crushed it.";
-            if (journeyPct >= 75)  return `Almost there! Only ${toGo} kg to go.`;
-            if (journeyPct >= 50)  return `Halfway there — ${lost} kg down, ${toGo} kg to go!`;
-            if (journeyPct >= 25)  return `Great start — ${lost} kg down so far!`;
-            if (lost > 0)          return `${lost} kg down. Every day counts — keep going!`;
-            return goalW && curW > goalW ? `${toGo} kg to your goal. Log consistently and you'll get there.` : "Log your meals daily to see your progress here.";
+          const coachAction = (() => {
+            if (!items.length) {
+              return {
+                tone: "warm",
+                title: "Begin with one easy log",
+                body: "Add one simple food. A banana, eggs, yogurt, or rice is enough to make the day clear.",
+                action: "Log food",
+                onClick: () => setTab("add"),
+              };
+            }
+            if (isOverTarget) {
+              return {
+                tone: "danger",
+                title: "Keep the next choice lighter",
+                body: `You are ${Math.abs(Math.round(foodRemaining))} kcal over your food target. Focus on water, protein, and a lighter next meal.`,
+                action: "Open log",
+                onClick: () => setTab("add"),
+              };
+            }
+            if (proteinGap > Math.max(20, proteinTarget * 0.35)) {
+              return {
+                tone: "protein",
+                title: "Protein needs attention",
+                body: `${proteinGap}g protein left. Eggs, tuna, yogurt, chicken, or tofu would help protect muscle while cutting.`,
+                action: "Add protein",
+                onClick: () => setTab("add"),
+              };
+            }
+            if (waterProgress < 55) {
+              return {
+                tone: "water",
+                title: "Drink one glass",
+                body: `You are at ${Math.round(number(dailyLog.water))} ml. One glass keeps the ritual moving without extra effort.`,
+                action: "+250 ml",
+                onClick: () => addWater(250),
+              };
+            }
+            if (burnedToday > 0) {
+              return {
+                tone: "success",
+                title: "Deficit supported",
+                body: `${Math.round(burnedToday)} kcal of activity supports your deficit. PULSE does not add it back to your eating target.`,
+                action: "View progress",
+                onClick: () => setTab("progress"),
+              };
+            }
+            return {
+              tone: "warm",
+              title: "Keep it light and consistent",
+              body: "Log the next meal while it is fresh. Small accurate logs beat perfect logs later.",
+              action: "Log food",
+              onClick: () => setTab("add"),
+            };
           })();
+
+          const todaySummary = items.length
+            ? items.slice(0, 4).map((item) => cleanFoodName(item.name)).join(" · ")
+            : "No food logged yet";
 
           return (
             <>
               {/* Hero ring */}
               <div className="today-hero">
                 <div className="hero-ring-wrap">
-                  <CalorieRing consumed={Math.round(totals.calories)} burned={Math.round(burnedToday)} target={dailyTarget} percent={caloriePercent} size={168} />
-                  {burnedToday > 0 && (
-                    <div className="ring-legend">
-                      <span className="ring-legend-dot" style={{ background: "#ff4500" }} />eaten
-                      <span className="ring-legend-dot" style={{ background: "#00d278", marginLeft: 8 }} />burned
-                    </div>
-                  )}
+                  <CalorieRing consumed={Math.round(totals.calories)} burned={Math.round(burnedToday)} target={dailyTarget} percent={caloriePercent} size={132} />
                 </div>
                 <div className="hero-ring-copy">
-                  <strong className={`hero-kcal${netRemaining < 0 ? " over" : ""}`}>{Math.abs(Math.round(netRemaining))}</strong>
-                  <span className="hero-sub">{netRemaining >= 0 ? "kcal to eat today" : "kcal over"}</span>
-                  {burnedToday > 0 && <span className="hero-burned">+{Math.round(burnedToday)} burned</span>}
+                  <span className="hero-sub">Food target</span>
+                  <strong className={`hero-kcal${isOverTarget ? " over" : ""}`}>{Math.abs(Math.round(foodRemaining))}</strong>
+                  <em>{isOverTarget ? "kcal over" : "kcal left"}</em>
                 </div>
               </div>
 
-              {/* Macro row */}
-              <div className="macro-grid">
-                {[
-                  { Icon: Beef,   label: "Protein", value: totals.protein, target: data.profile.proteinTarget, color: "#4dc3ff" },
-                  { Icon: Wheat,  label: "Carbs",   value: totals.carbs,   target: data.profile.carbsTarget,   color: "#a99cff" },
-                  { Icon: Droplet,label: "Fat",     value: totals.fat,     target: data.profile.fatTarget,     color: "#ffaa00" },
-                  { Icon: Leaf,   label: "Fiber",   value: totals.fiber,   target: data.profile.fiberTarget,   color: "#00d278" },
-                ].map((m) => {
-                  const pct = m.target ? Math.min(100, (m.value / m.target) * 100) : 0;
-                  return (
-                    <div key={m.label} className="macro-chip">
-                      <div className="macro-circle" style={{ color: m.color }}><m.Icon size={18} strokeWidth={1.5} /></div>
-                      <strong className="macro-val">{round(m.value)}g</strong>
-                      <div className="macro-bar-rail"><div className="macro-bar-fill" style={{ width: `${pct}%`, background: m.color }} /></div>
-                    </div>
-                  );
-                })}
+              <div className="daily-status-grid">
+                <div><span>Eaten</span><strong>{eatenToday}</strong></div>
+                <div><span>Activity</span><strong className="cool">+{Math.round(burnedToday)}</strong></div>
+                <div><span>Water</span><strong>{Math.round(number(dailyLog.water))}ml</strong></div>
               </div>
 
-              {/* Water card */}
-              <div className="water-card">
-                <div className="water-top">
-                  <div className="water-left">
-                    <Droplets size={18} color="#4dc3ff" />
-                    <span className="water-title">Water</span>
-                  </div>
-                  <span className="water-value">{Math.round(number(dailyLog.water))} / {data.profile.waterTarget || 2500} ml</span>
+              <div className={`coach-card ${coachAction.tone}`}>
+                <div>
+                  <span className="coach-eyebrow">Next best action</span>
+                  <strong>{coachAction.title}</strong>
+                  <p>{coachAction.body}</p>
                 </div>
-                <div className="water-dots">
-                  {Array.from({ length: 8 }).map((_, i) => (
-                    <div key={i} className={`water-dot${number(dailyLog.water) >= (i + 1) * 250 ? " filled" : ""}`} />
-                  ))}
-                </div>
-                <button className="water-add" onClick={() => addWater(250)}>+250 ml</button>
               </div>
 
-              {/* Activity card */}
-              <ActivityCard dailyLog={dailyLog} patchDailyLog={patchDailyLog} weightKg={data.profile.weight} />
-
-              {/* Weight progress strip */}
-              <div className="weight-strip">
-                {startW && curW ? (
-                  <>
-                    <div className="weight-strip-numbers">
-                      <div className="weight-strip-stat"><strong>{startW} kg</strong><span>Start</span></div>
-                      <div className="weight-strip-progress">
-                        <div className="weight-strip-bar-track">
-                          <div className="weight-strip-bar-fill" style={{ width: `${journeyPct}%` }} />
-                          <div className="weight-strip-marker" style={{ left: `${journeyPct}%` }}>{curW} kg</div>
-                        </div>
-                        <div className="weight-strip-bar-labels">
-                          <span>Start {startW} kg</span>
-                          {goalW ? <span>Goal {goalW} kg</span> : null}
-                        </div>
-                      </div>
-                      {goalW ? <div className="weight-strip-stat right"><strong>{goalW} kg</strong><span>Goal</span></div> : null}
-                    </div>
-                    <p className="weight-strip-motivation">{motivational}</p>
-                  </>
-                ) : (
-                  <p className="weight-strip-motivation" style={{ textAlign: "center" }}>
-                    Log your weight in <strong style={{ color: "var(--accent)" }}>Me → Profile</strong> to see your journey here.
-                  </p>
-                )}
+              <div className="daily-action-grid" aria-label="Quick log actions">
+                <button className="daily-action-large action-food" onClick={() => setTab("add")}><Plus size={17} />Food</button>
+                <button className="daily-action-large action-water" onClick={() => addWater(250)}><Droplet size={17} />Water</button>
+                <button className="daily-action-small" onClick={() => openActivityInput(TODAY_ACTIVITY_ACTIONS.walk)}><Footprints size={16} />Walk</button>
+                <button className="daily-action-small" onClick={() => openActivityInput(TODAY_ACTIVITY_ACTIONS.swim)}><Waves size={16} />Swim</button>
+                <button className="daily-action-small" onClick={() => openActivityInput(TODAY_ACTIVITY_ACTIONS.strength)}><Dumbbell size={16} />Strength</button>
               </div>
 
-              {/* Today's log — collapsible meal summary */}
-              <details className="todays-log-section">
-                <summary className="todays-log-summary">
-                  <span>📋 Today's Log</span>
-                  <span className="todays-log-meta">
-                    {items.length} item{items.length !== 1 ? "s" : ""} · {Math.round(totals.calories)} kcal
-                    <ChevronRight size={14} className="meal-chevron" />
-                  </span>
-                </summary>
-                <div className="todays-log-body">
-                  {MEALS.map((meal) => {
-                    const mealItems = items.filter((e) => e.meal === meal);
-                    if (!mealItems.length) return null;
-                    const mealCals = totalsFor(mealItems).calories;
-                    return (
-                      <div key={meal} className="todays-log-meal">
-                        <div className="todays-log-meal-header">
-                          <span>{MEAL_ICONS[meal]} {meal}</span>
-                          <span className="todays-log-meal-cal">{Math.round(mealCals)} kcal</span>
-                        </div>
-                        {mealItems.map((item) => (
-                          <div key={item.id} className="todays-log-item">
-                            <span className="todays-log-item-name">{item.name}</span>
-                            <span className="todays-log-item-cal">{Math.round(item.calories)}</span>
-                            <button className="food-delete" onClick={() => removeFood(item.id)} aria-label="Remove">
-                              <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="1" y1="1" x2="13" y2="13"/><line x1="13" y1="1" x2="1" y2="13"/></svg>
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })}
-                  {items.length === 0 && <p className="todays-log-empty">No food logged yet today. Tap + to add.</p>}
+              <section className="todays-log-section ritual-log-card">
+                <div className="todays-log-summary">
+                  <span>Today log</span>
+                  <span className="todays-log-meta">{Math.round(totals.calories)} kcal</span>
                 </div>
-              </details>
-
-              {/* Streak — taps to Progress */}
-              {streak > 0 && (
-                <button className="streak-pill" onClick={() => setTab("progress")}>
-                  <span className="streak-count">🔥{streak}</span>
-                  <div className="streak-label">
-                    <strong>{streak === 1 ? "1 day streak" : `${streak}-day streak`}</strong>
-                    <span>Tap to see your full history →</span>
-                  </div>
-                  <div className="streak-dots">
-                    {Array.from({ length: Math.min(streak, 7) }).map((_, i) => (
-                      <div key={i} className={`streak-dot${i < streak ? " lit" : ""}`} />
-                    ))}
-                  </div>
-                </button>
-              )}
+                <p>{todaySummary}{number(dailyLog.water) > 0 ? ` · ${Math.round(number(dailyLog.water))}ml water` : ""}</p>
+              </section>
             </>
           );
         })()}
 
-        {/* ═══ LOG ═══ */}
+        {/* â•â•â• LOG â•â•â• */}
         {tab === "add" && (
           <div className="log-screen">
-            <h2>What did you eat?</h2>
-
-            {/* Meal tabs */}
-            <div className="meal-tabs">
-              {MEALS.map((m) => (
-                <button key={m} className={`meal-tab${logForm.meal === m ? " active" : ""}`} onClick={() => setLogForm((f) => ({ ...f, meal: m }))}>
-                  {MEAL_ICONS[m]} {m}
-                </button>
-              ))}
-            </div>
+            <header className="screen-mini-head"><strong>Log food</strong><span>{logForm.meal}</span></header>
 
             {/* Search */}
             <div className="search-bar-wrap">
@@ -1583,28 +1542,27 @@ function AppV2Inner() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && searchOpenFoodFacts()}
-                placeholder="Search foods…"
+                placeholder="Type banana, egg, rice..."
                 autoFocus
               />
-              {query && <button className="search-bar-clear" onClick={() => { setQuery(""); setResults([]); }}>✕</button>}
-            </div>
-            <div className="search-actions">
-              <button className="secondary" onClick={searchOpenFoodFacts} disabled={busy}>Search</button>
-              <button className="secondary" onClick={searchUsda} disabled={busy}>USDA</button>
+              {query && <button className="search-bar-clear" onClick={() => { setQuery(""); setResults([]); }}>x</button>}
             </div>
 
-            {/* AI tools */}
-            <div className="ai-tools">
-              <label className="ai-tool-btn ai-tool-camera">
-                <div className="ai-tool-icon ai-icon-camera"><Camera size={20} /></div>
-                Photo
-                <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => analyzeFoodPhoto(e.target.files?.[0])} />
-              </label>
-              <button className="ai-tool-btn" onClick={() => setDescribeOpen((v) => !v)}>
-                <div className="ai-tool-icon ai-icon-describe"><Brain size={20} /></div>
-                Describe
-              </button>
+            {/* Meal tabs */}
+            <div className="meal-tabs">
+              {MEALS.map((m) => (
+                <button key={m} className={`meal-tab${logForm.meal === m ? " active" : ""}`} onClick={() => setLogForm((f) => ({ ...f, meal: m }))}>
+                  {MEAL_ICONS[m] ? `${MEAL_ICONS[m]} ${m}` : m}
+                </button>
+              ))}
             </div>
+
+            {busy && (
+              <div className="inline-loading" role="status" aria-live="polite">
+                <span className="pin-spinner" />
+                <span>Checking food sources...</span>
+              </div>
+            )}
 
             {/* Describe input */}
             {describeOpen && (
@@ -1612,7 +1570,7 @@ function AppV2Inner() {
                 <input
                   value={mealDescription}
                   onChange={(e) => setMealDescription(e.target.value)}
-                  placeholder="e.g. nasi lemak with egg and sambal…"
+                  placeholder="e.g. nasi lemak with egg and sambal..."
                   onKeyDown={(e) => e.key === "Enter" && describeMealToAi()}
                   autoFocus
                 />
@@ -1628,8 +1586,8 @@ function AppV2Inner() {
               <div className="pending-card">
                 <h4>{pendingLogFood.name}</h4>
                 <p>
-                  {pendingLogFood.calories} kcal · P {pendingLogFood.protein || 0}g · C {pendingLogFood.carbs || 0}g · F {pendingLogFood.fat || 0}g
-                  {pendingLogFood.confidence === "ai" && " · AI estimate"}
+                  {pendingLogFood.calories} kcal - P {pendingLogFood.protein || 0}g - C {pendingLogFood.carbs || 0}g - F {pendingLogFood.fat || 0}g
+                  {pendingLogFood.confidence === "ai" && " - AI estimate"}
                 </p>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button className="primary" style={{ flex: 1 }} onClick={() => {
@@ -1647,7 +1605,7 @@ function AppV2Inner() {
             {/* Results */}
             {displayResults.length > 0 && (
               <div className="results-section">
-                <p className="results-label">{query.trim() ? "Results" : "Quick add"}</p>
+                <p className="results-label">{query.trim() ? "Tap a food to add" : "Quick add"}</p>
                 <div className="results-list">
                   {displayResults.slice(0, 12).map((food) => {
                     const cal = Math.round(scaleNutrition(food.per100, food.servingGrams).calories);
@@ -1655,7 +1613,7 @@ function AppV2Inner() {
                       <button key={`${food.source}-${food.id}`} className="result-item" onClick={() => openLogFood(food)}>
                         <div className="result-info">
                           <span className="result-name">{cleanFoodName(food.name)}</span>
-                          <span className="result-sub">{food.brand || food.source} · {food.servingGrams}g</span>
+                          <span className="result-sub">{food.brand || food.source} - {food.servingGrams}g</span>
                         </div>
                         <span className="result-cal">{cal}</span>
                         <Plus size={18} color="var(--accent)" />
@@ -1665,6 +1623,29 @@ function AppV2Inner() {
                 </div>
               </div>
             )}
+
+            <details className="advanced-tools">
+              <summary>
+                <span>More ways to add</span>
+                <small>Photo, describe, USDA</small>
+                <ChevronRight size={16} className="meal-chevron" />
+              </summary>
+              <div className="ai-tools">
+                <label className="ai-tool-btn ai-tool-camera">
+                  <div className="ai-tool-icon ai-icon-camera"><Camera size={20} /></div>
+                  Photo
+                  <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => analyzeFoodPhoto(e.target.files?.[0])} />
+                </label>
+                <button className="ai-tool-btn" onClick={() => setDescribeOpen((v) => !v)}>
+                  <div className="ai-tool-icon ai-icon-describe"><Brain size={20} /></div>
+                  Describe
+                </button>
+                <button className="ai-tool-btn" onClick={searchUsda} disabled={busy || !query.trim()}>
+                  <div className="ai-tool-icon ai-icon-describe"><Search size={20} /></div>
+                  USDA
+                </button>
+              </div>
+            </details>
 
             {/* Manual entry toggle */}
             <button className="manual-entry-toggle" onClick={() => setShowManual((v) => !v)}>
@@ -1686,9 +1667,39 @@ function AppV2Inner() {
           </div>
         )}
 
-        {/* ═══ PROGRESS ═══ */}
+        {/* â•â•â• PROGRESS â•â•â• */}
         {tab === "progress" && (
           <div className="progress-screen">
+            <header className="screen-mini-head"><strong>Progress</strong><span>Last 7 days</span></header>
+            {(() => {
+              const latestWeight = weightEntries.length ? number(weightEntries[weightEntries.length - 1].weight) : number(data.profile.weight);
+              const goalWeight = number(data.profile.goalWeight);
+              const highestWeight = number(data.profile.highestWeight) || (weightEntries[0] ? number(weightEntries[0].weight) : latestWeight);
+              const lostWeight = highestWeight && latestWeight ? round(highestWeight - latestWeight) : 0;
+              const remainingWeight = latestWeight && goalWeight ? round(latestWeight - goalWeight) : 0;
+              return (
+                <div className="progress-hero-card">
+                  <div>
+                    <span className="eyebrow">Weight ritual</span>
+                    <h2>{latestWeight ? `${formatKg(latestWeight)} kg` : "Log your first weight"}</h2>
+                    <p>
+                      {latestWeight && highestWeight
+                        ? `Started at ${formatKg(highestWeight)} kg. ${lostWeight > 0 ? `${formatKg(lostWeight)} kg down so far.` : "Keep logging to see the trend."}`
+                        : latestWeight
+                          ? "Set your starting and goal weight in Me to make the journey clear."
+                        : "Add weight and waist entries to make progress visible."}
+                    </p>
+                    <div className="progress-ritual-grid">
+                      <span><b>{highestWeight ? formatKg(highestWeight) : "--"}</b><em>Start</em></span>
+                      <span><b>{latestWeight ? formatKg(latestWeight) : "--"}</b><em>Now</em></span>
+                      <span><b>{goalWeight ? formatKg(goalWeight) : "--"}</b><em>Goal</em></span>
+                      <span><b>{remainingWeight > 0 ? formatKg(remainingWeight) : "0"}</b><em>Left</em></span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             <WeightJourneyCard
               entries={weightEntries}
               highestWeight={data.profile.highestWeight}
@@ -1731,10 +1742,10 @@ function AppV2Inner() {
                     <div className="calculation">
                       <div><span>TDEE</span><strong>{tdee} kcal</strong></div>
                       <div><span>Daily target</span><strong>{target} kcal</strong></div>
-                      {deficitPct > 0 && <div><span>Deficit</span><strong style={{ color: "var(--success)" }}>−{deficitPct}%</strong></div>}
+                      {deficitPct > 0 && <div><span>Deficit</span><strong style={{ color: "var(--success)" }}>âˆ’{deficitPct}%</strong></div>}
                     </div>
                   )}
-                  <p className="bodyfat-hint">Based on height {data.profile.height} cm · waist {data.profile.waist} cm · neck {data.profile.neck} cm{data.profile.hip ? ` · hip ${data.profile.hip} cm` : ""}. Update measurements in Me tab for a fresh reading.</p>
+                  <p className="bodyfat-hint">Based on height {data.profile.height} cm Â· waist {data.profile.waist} cm Â· neck {data.profile.neck} cm{data.profile.hip ? ` Â· hip ${data.profile.hip} cm` : ""}. Update measurements in Me tab for a fresh reading.</p>
                 </div>
               );
             })()}
@@ -1749,7 +1760,7 @@ function AppV2Inner() {
               <CalorieChart diary={data.diary} target={dailyTarget} />
               {streak > 0 && (
                 <div className="streak-pill" style={{ marginTop: 10 }}>
-                  <span className="streak-count">🔥{streak}</span>
+                  <span className="streak-count">ðŸ”¥{streak}</span>
                   <div className="streak-label"><strong>{streak}-day logging streak</strong></div>
                 </div>
               )}
@@ -1779,7 +1790,7 @@ function AppV2Inner() {
                       <span className="entry-date">{m.date}</span>
                       {m.weight && <span className="entry-weight">{m.weight} kg</span>}
                       {m.waist  && <span className="entry-waist">{m.waist} cm waist</span>}
-                      <button className="entry-delete" onClick={() => deleteMeasurement(m.id)}>✕</button>
+                      <button className="entry-delete" onClick={() => deleteMeasurement(m.id)}>âœ•</button>
                     </div>
                   ))}
                 </div>
@@ -1788,11 +1799,32 @@ function AppV2Inner() {
           </div>
         )}
 
-        {/* ═══ ME ═══ */}
+        {/* â•â•â• ME â•â•â• */}
         {tab === "settings" && (
           <div className="me-screen">
+            <div className="me-hero-card">
+              <div className="me-avatar">{(data.profile.name || cloudSession?.user?.email || "P").slice(0, 1).toUpperCase()}</div>
+              <div>
+                <span className="eyebrow">PULSE profile</span>
+                <h2>{data.profile.name || "Your weight-loss companion"}</h2>
+                <p>{cloudSession?.user?.email ? `Signed in as ${cloudSession.user.email}` : "Local mode. Sign in to sync across devices."}</p>
+              </div>
+            </div>
+
+            <div className="profile-summary-grid">
+              <section><span>Daily target</span><strong>{Math.round(dailyTarget)} kcal</strong></section>
+              <section><span>Water</span><strong>{number(data.profile.waterTarget) || 2500} ml</strong></section>
+              <section><span>Protein</span><strong>{number(data.profile.proteinTarget) || 130} g</strong></section>
+              <section><span>Goal</span><strong>{data.profile.goalWeight ? `${data.profile.goalWeight} kg` : "Set goal"}</strong></section>
+            </div>
+
             {/* Profile */}
-            <div className="tool-card">
+            <details className="settings-details profile-card-anchor">
+              <summary>
+                <span>Health profile</span>
+                <ChevronRight size={15} className="meal-chevron" />
+              </summary>
+              <div className="tool-card">
               <div className="section-heading">
                 <div>
                   <span className="eyebrow">Step 1</span>
@@ -1804,7 +1836,7 @@ function AppV2Inner() {
                 <label className="field">
                   <span>Sex</span>
                   <select value={data.profile.gender} onChange={(e) => setProfile({ gender: e.target.value })}>
-                    <option value="">—</option>
+                    <option value="">â€”</option>
                     <option value="male">Male</option>
                     <option value="female">Female</option>
                   </select>
@@ -1821,9 +1853,9 @@ function AppV2Inner() {
                   <span>Activity level</span>
                   <select value={data.profile.activityLevel} onChange={(e) => setProfile({ activityLevel: e.target.value })}>
                     <option value="sedentary">Sedentary</option>
-                    <option value="light">Light (1–3×/wk)</option>
-                    <option value="moderate">Moderate (3–5×/wk)</option>
-                    <option value="active">Active (6–7×/wk)</option>
+                    <option value="light">Light (1â€“3Ã—/wk)</option>
+                    <option value="moderate">Moderate (3â€“5Ã—/wk)</option>
+                    <option value="active">Active (6â€“7Ã—/wk)</option>
                   </select>
                 </label>
                 <label className="field">
@@ -1842,12 +1874,18 @@ function AppV2Inner() {
                   if (profileSaveTimer.current) clearTimeout(profileSaveTimer.current);
                   setProfileSaved(true);
                   profileSaveTimer.current = setTimeout(() => setProfileSaved(false), 1800);
-                }}>{profileSaved ? "✓ Saved!" : "Save profile"}</button>
+                }}>{profileSaved ? "âœ“ Saved!" : "Save profile"}</button>
               </div>
-            </div>
+              </div>
+            </details>
 
             {/* Goals */}
-            <div className="tool-card">
+            <details className="settings-details goals-card-anchor">
+              <summary>
+                <span>Goals and macros</span>
+                <ChevronRight size={15} className="meal-chevron" />
+              </summary>
+              <div className="tool-card">
               <div className="section-heading">
                 <div>
                   <span className="eyebrow">Step 2</span>
@@ -1863,7 +1901,7 @@ function AppV2Inner() {
                   <div className="calculation" style={{ marginBottom: 14 }}>
                     <div><span>TDEE (maintenance)</span><strong>{tdee} kcal</strong></div>
                     <div><span>Eating target</span><strong>{target} kcal</strong></div>
-                    {deficitPct > 0 && <div><span>Calorie deficit</span><strong style={{ color: "var(--success)" }}>−{deficitPct}%</strong></div>}
+                    {deficitPct > 0 && <div><span>Calorie deficit</span><strong style={{ color: "var(--success)" }}>âˆ’{deficitPct}%</strong></div>}
                     {bc && <>
                       <div><span>Body fat %</span><strong style={{ color: "#ff8c00" }}>{bc.bf}%</strong></div>
                       <div><span>Lean mass</span><strong>{bc.leanMass} kg</strong></div>
@@ -1880,10 +1918,17 @@ function AppV2Inner() {
                 <Field label="Water goal" suffix="ml" type="number" min="0" value={data.profile.waterTarget} onChange={(e) => setProfile({ waterTarget: number(e.target.value) })} />
               </div>
               <button className="secondary" onClick={autoCalcTargets}>Auto-calculate from profile</button>
-            </div>
+              </div>
+            </details>
 
             {/* Security */}
-            <div className="tool-card">
+            <details className="settings-details privacy-card-anchor">
+              <summary>
+                <span>Privacy & app lock</span>
+                <small>PIN and lock screen</small>
+                <ChevronRight size={16} className="meal-chevron" />
+              </summary>
+              <div className="tool-card">
               <div className="section-heading">
                 <div>
                   <span className="eyebrow">Privacy</span>
@@ -1897,10 +1942,17 @@ function AppV2Inner() {
                 <Field label="Confirm new PIN" type="password" inputMode="numeric" value={pinChange.confirm} onChange={(e) => setPinChange((p) => ({ ...p, confirm: e.target.value.replace(/\D/g, "") }))} />
               </div>
               <button className="primary" onClick={changePin}>{security ? "Change PIN" : "Create PIN lock"}</button>
-            </div>
+              </div>
+            </details>
 
             {/* Data */}
-            <div className="tool-card">
+            <details className="settings-details sync-card-anchor">
+              <summary>
+                <span>Backup & sync</span>
+                <small>Cloud and local backup</small>
+                <ChevronRight size={16} className="meal-chevron" />
+              </summary>
+              <div className="tool-card">
               <div className="section-heading">
                 <div>
                   <span className="eyebrow">Data</span>
@@ -1935,12 +1987,13 @@ function AppV2Inner() {
                 <button className="danger-button" onClick={() => setDeleteConfirm(true)}>Delete all data</button>
               </div>
               <p className="helper" style={{ marginTop: 10, fontSize: 11 }}>Your data lives on this device. Cloud backup is optional. The PIN only locks this screen.</p>
-            </div>
+              </div>
+            </details>
           </div>
         )}
       </main>
 
-      {/* ─── Bottom nav ─── */}
+      {/* â”€â”€â”€ Bottom nav â”€â”€â”€ */}
       <nav className="bottom-nav" role="tablist" aria-label="Primary navigation">
         {/** @type {Array<[string, string, React.ReactNode]>} */ ([
           ["diary",    "Today",    <CalendarDays size={22} strokeWidth={1.8} aria-hidden="true" />],
@@ -1955,14 +2008,55 @@ function AppV2Inner() {
         ))}
       </nav>
 
-      {/* ─── FAB (Today only) ─── */}
+      {/* â”€â”€â”€ FAB (Today only) â”€â”€â”€ */}
       {tab === "diary" && (
         <button className="fab" aria-label="Log food" onClick={() => setTab("add")}>
           <Plus size={26} strokeWidth={2.5} />
         </button>
       )}
 
-      {/* ─── Food log modal ─── */}
+      {/* Activity log modal */}
+      {activityDraft && (
+        <div className="modal-backdrop" onClick={() => setActivityDraft(null)}>
+          <section className="modal activity-log-modal" role="dialog" aria-modal="true" aria-labelledby="log-activity-title" onClick={(e) => e.stopPropagation()}>
+            <span className="eyebrow">Log activity</span>
+            <h2 id="log-activity-title">{activityDraft.label}</h2>
+            <p className="helper">How many minutes did you do? Activity supports your deficit; it does not increase your food target.</p>
+            <div className="activity-duration-row">
+              {[15, 20, 30, 45, 60].map((minutes) => (
+                <button
+                  key={minutes}
+                  className={number(activityDraft.minutes) === minutes ? "active" : ""}
+                  onClick={() => setActivityDraft((a) => ({ ...a, minutes }))}
+                  type="button"
+                >
+                  {minutes}
+                </button>
+              ))}
+            </div>
+            <Field
+              label="Duration"
+              suffix="min"
+              type="number"
+              inputMode="numeric"
+              min="1"
+              max="600"
+              value={activityDraft.minutes}
+              onChange={(e) => setActivityDraft((a) => ({ ...a, minutes: e.target.value }))}
+            />
+            <div className="activity-estimate">
+              <span>Estimated burn</span>
+              <strong>{activityCalories()} kcal</strong>
+            </div>
+            <div className="modal-actions">
+              <button className="secondary" onClick={() => setActivityDraft(null)}>Cancel</button>
+              <button className="primary" onClick={saveActivityDraft}>Save activity</button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* â”€â”€â”€ Food log modal â”€â”€â”€ */}
       {selectedFood && (
         <div className="modal-backdrop" onClick={() => setSelectedFood(null)}>
           <section className="modal" role="dialog" aria-modal="true" aria-labelledby="log-food-title" onClick={(e) => e.stopPropagation()}>
@@ -1985,7 +2079,7 @@ function AppV2Inner() {
             </div>
             <div className="calculation">
               <div><span>Calories</span><strong>{scaleNutrition(selectedFood.per100, logForm.grams).calories} kcal</strong></div>
-              <div><span>Macros</span><strong>P {scaleNutrition(selectedFood.per100, logForm.grams).protein}g · C {scaleNutrition(selectedFood.per100, logForm.grams).carbs}g · F {scaleNutrition(selectedFood.per100, logForm.grams).fat}g</strong></div>
+              <div><span>Macros</span><strong>P {scaleNutrition(selectedFood.per100, logForm.grams).protein}g - C {scaleNutrition(selectedFood.per100, logForm.grams).carbs}g - F {scaleNutrition(selectedFood.per100, logForm.grams).fat}g</strong></div>
             </div>
             <div className="modal-actions">
               <button className="secondary" onClick={() => setSelectedFood(null)}>Cancel</button>
@@ -1995,7 +2089,7 @@ function AppV2Inner() {
         </div>
       )}
 
-      {/* ─── Delete confirm modal ─── */}
+      {/* â”€â”€â”€ Delete confirm modal â”€â”€â”€ */}
       {deleteConfirm && (
         <div className="modal-backdrop" onClick={() => setDeleteConfirm(false)}>
           <section className="modal" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title" onClick={(e) => e.stopPropagation()}>
@@ -2010,7 +2104,7 @@ function AppV2Inner() {
         </div>
       )}
 
-      {/* ─── Toast ─── */}
+      {/* â”€â”€â”€ Toast â”€â”€â”€ */}
       {notice && <p className="notice" role="status" aria-live="polite">{notice}</p>}
     </div>
   );
